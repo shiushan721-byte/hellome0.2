@@ -78,6 +78,10 @@ export default function App() {
         <Route path="agents/media-showcase" element={<AgentChatCanvasPage />} />
         <Route path="agents/media-demo" element={<AgentChatCanvasPage />} />
         <Route path="agents/media-proposal" element={<AgentChatCanvasPage />} />
+        
+        {/* 保留老版交互入口 */}
+        <Route path="agents/media-legacy" element={<UgcVideoAgentPage />} />
+        
         <Route path="agents/sales" element={<AgentComingSoonPage agentId="sales" />} />
         <Route path="agents/:agentId" element={<AgentLauncherPage />} />
         <Route path="agents-legacy" element={<AgentsLegacyRedirect />} />

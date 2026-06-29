@@ -6,7 +6,7 @@ import ChatPanel from '../../components/app/chat/ChatPanel';
 import CanvasPanel from '../../components/app/canvas/CanvasPanel';
 import { createRemoteUgcTask, getRemoteTask } from '../../lib/taskApi';
 import type { UgcTaskInput, UgcTaskEvent, UgcTaskArtifact } from '../../types/ugc';
-import { consumePendingAgentContext } from '../../lib/projectStore';
+import { consumePendingAgentContext, getActiveProjectId } from '../../lib/projectStore';
 
 export interface TaskRun {
   taskId: string;
@@ -47,13 +47,15 @@ export default function AgentChatCanvasPage() {
 
   // Initialize & Consume Project Context
   useEffect(() => {
-    // 强制拦截逻辑：必须有 Project Context 才能执行。如果没有说明不是从弹窗进来的，强制退回大厅。
+    // 处理 React Strict Mode 带来的双重触发，以及页面刷新时的状态丢失
     const context = consumePendingAgentContext(agentId);
-    if (!context?.projectId) {
+    const resolvedProjectId = context?.projectId || getActiveProjectId();
+    
+    if (!resolvedProjectId) {
       navigate('/app/agents', { replace: true });
       return;
     }
-    setProjectId(context.projectId);
+    setProjectId(resolvedProjectId);
 
     if (dynamicConfig && phase === 'idle') {
       setMessages([

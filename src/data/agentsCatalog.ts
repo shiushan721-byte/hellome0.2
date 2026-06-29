@@ -29,7 +29,7 @@ export const RANKING_SECTIONS = [
     gradient: 'from-amber-50 via-yellow-50/80 to-orange-50',
     accent: 'text-amber-500',
     decor: '👍',
-    agentIds: ['geo', 'media-seeding', 'schema-optimizer'],
+    agentIds: ['geo', 'media-legacy', 'media-seeding', 'schema-optimizer'],
   },
   {
     id: 'popular',
@@ -52,6 +52,21 @@ export const RANKING_SECTIONS = [
 ] as const;
 
 export const AGENTS: AgentItem[] = [
+  {
+    id: 'media-legacy',
+    name: '经典版视频管家',
+    desc: '保留经典表单输入界面，提供详细的商业参数配置与方案蓝图选择。',
+    tokenRange: '10,000-50,000 Token',
+    category: 'media',
+    creator: 'hz-hermes',
+    creatorAvatar: 'https://api.dicebear.com/9.x/shapes/svg?seed=legacy',
+    heat: '100k+',
+    likes: '4.8',
+    iconSrc: AGENT_ICONS.media,
+    available: true,
+    path: '/app/agents/media-legacy',
+    badge: 'Classic',
+  },
   {
     id: 'geo',
     name: 'GEO 智能体',
