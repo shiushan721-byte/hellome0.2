@@ -283,20 +283,22 @@ export default function AgentChatCanvasPage() {
     if (action === 'open_folder') {
       alert('已触发指令：打开本地文件夹 (Hermes Client Integration)');
     } else if (action === 'edit_request') {
-      // Create a new dynamic step for revision
-      const revisionStepId = `revision_${Date.now()}`;
-      const newStep = {
-        id: revisionStepId,
-        type: 'text' as const,
-        question: '好的，请问你希望修改哪里？我可以带着新的要求重新生成一遍。',
-        placeholder: '例如：视频节奏再快一点，多强调产品价格'
-      };
-      
-      const clonedConfig = JSON.parse(JSON.stringify(dynamicConfig));
-      clonedConfig.steps.push(newStep);
-      setDynamicConfig(clonedConfig);
-      
-      setPhase('chatting');
+      // 本期不走“增加自定义输入文字框”的逻辑
+      // 根据交互模式，回退到适合修改的界面
+      const mode = dynamicConfig.interactionMode || 'mode_a';
+      if (mode === 'mode_b') {
+        // 模式 B 纯卡片，直接切回 chatting 状态，并给出系统提示引导
+        setPhase('chatting');
+        setMessages(prev => [...prev, {
+          id: `edit-prompt-${Date.now()}`,
+          role: 'agent',
+          content: '请点击上方需要调整的配置卡片右上角的「修改」按钮进行调整哦～',
+          timestamp: Date.now(),
+        }]);
+      } else {
+        // 模式 A 和 C 都有确认大卡片，回退到 confirming 状态让用户统一重新核对
+        setPhase('confirming');
+      }
     } else if (action === 'restart') {
       setPhase('idle');
       setAnswers({});
