@@ -45,11 +45,22 @@ export default function ChatInputCard({ step, onSubmit, disabled, completed, ans
               {answer.filePreviewUrl ? (
                 <div className="flex items-center gap-3 p-2 rounded-xl border border-black/10 bg-[#F5F5F7]/50 w-fit">
                   <div className="h-12 w-12 rounded-lg bg-black/5 overflow-hidden shrink-0 flex items-center justify-center">
-                    {answer.filePreviewUrl.match(/\.(jpeg|jpg|gif|png|webp|svg)$/i) || answer.filePreviewUrl.startsWith('blob:') ? (
-                      <img src={answer.filePreviewUrl} alt="uploaded" className="h-full w-full object-cover" />
-                    ) : (
-                      <UploadCloud className="w-5 h-5 text-black/40" />
-                    )}
+                    {(() => {
+                      const url = answer.filePreviewUrl;
+                      const isImage = url.match(/\.(jpeg|jpg|gif|png|webp|svg)$/i) || (url.startsWith('blob:') && answer.fileName?.match(/\.(jpeg|jpg|gif|png|webp|svg)$/i));
+                      const isVideo = url.match(/\.(mp4|mov|avi|wmv|flv|webm)$/i) || (url.startsWith('blob:') && answer.fileName?.match(/\.(mp4|mov|avi|wmv|flv|webm)$/i));
+                      
+                      if (isImage) {
+                        return <img src={url} alt="uploaded" className="h-full w-full object-cover" />;
+                      } else if (isVideo) {
+                        return (
+                          <div className="relative h-full w-full bg-black/80 flex items-center justify-center">
+                            <span className="text-[10px] text-white/90 font-bold">▶视频</span>
+                          </div>
+                        );
+                      }
+                      return <UploadCloud className="w-5 h-5 text-black/40" />;
+                    })()}
                   </div>
                   <div className="flex flex-col pr-3">
                     <span className="text-[13px] font-semibold text-black max-w-[200px] truncate">
