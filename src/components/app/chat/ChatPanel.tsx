@@ -14,9 +14,10 @@ interface Props {
   onEditStep?: (stepId: string) => void;
   onConfirmExecute?: () => void;
   answers?: Record<string, StepAnswer>;
+  editingStepId?: string | null;
 }
 
-export default function ChatPanel({ config, messages, currentStepIndex, phase, onAnswer, onAction, onEditStep, onConfirmExecute, answers = {} }: Props) {
+export default function ChatPanel({ config, messages, currentStepIndex, phase, onAnswer, onAction, onEditStep, onConfirmExecute, answers = {}, editingStepId }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -64,9 +65,25 @@ export default function ChatPanel({ config, messages, currentStepIndex, phase, o
         ))}
 
         {(config.interactionMode === 'mode_b' || config.interactionMode === 'mode_c') && (
-          config.steps.slice(0, currentStepIndex).map((step) => {
+          config.steps.map((step, idx) => {
+            // 我们只渲染已经回答过的，或者是当前正在回答的
             const answer = answers[step.id];
-            if (!answer) return null;
+            const isEditing = editingStepId === step.id;
+            const isActive = idx === currentStepIndex && phase === 'chatting' && !editingStepId;
+            
+            // 如果这个 step 既没有答案，又不是当前活跃步，也不是编辑步，就不渲染
+            if (!answer && !isActive && !isEditing) return null;
+
+            if (isEditing || isActive) {
+              return (
+                <ChatInputCard 
+                  key={step.id} 
+                  step={step} 
+                  onSubmit={onAnswer} 
+                />
+              );
+            }
+
             return (
               <ChatInputCard 
                 key={step.id} 
@@ -78,6 +95,14 @@ export default function ChatPanel({ config, messages, currentStepIndex, phase, o
               />
             );
           })
+        )}
+
+        {/* 对于 mode_a 保持原有逻辑：当前活跃的 step */}
+        {(config.interactionMode === 'mode_a' || !config.interactionMode) && phase === 'chatting' && currentStep && (
+          <ChatInputCard 
+            step={currentStep} 
+            onSubmit={onAnswer} 
+          />
         )}
 
         {phase === 'confirming' && (

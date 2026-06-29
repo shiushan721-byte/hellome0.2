@@ -38,6 +38,7 @@ export default function AgentChatCanvasPage() {
   const [phase, setPhase] = useState<WorkflowPhase>('idle');
   const [messages, setMessages] = useState<IChatMessage[]>([]);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
+  const [editingStepId, setEditingStepId] = useState<string | null>(null);
   const [answers, setAnswers] = useState<Record<string, StepAnswer>>({});
   
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
@@ -90,6 +91,29 @@ export default function AgentChatCanvasPage() {
     setAnswers(newAnswers);
     setMessages(prev => [...prev, userMsg]);
     
+    if (editingStepId) {
+      setEditingStepId(null);
+      // After non-destructive edit, check if all steps are done
+      const allComplete = dynamicConfig.steps.every(s => newAnswers[s.id]);
+      if (allComplete) {
+        const mode = dynamicConfig.interactionMode || 'mode_a';
+        if (mode === 'mode_b') {
+          setPhase('executing');
+          await startHermesExecution(newAnswers);
+        } else {
+          setPhase('confirming');
+        }
+      } else {
+        // Find first unanswered step
+        const firstUnansweredIndex = dynamicConfig.steps.findIndex(s => !newAnswers[s.id]);
+        if (firstUnansweredIndex !== -1) {
+          setCurrentStepIndex(firstUnansweredIndex);
+          setPhase('chatting');
+        }
+      }
+      return;
+    }
+    
     const nextIndex = currentStepIndex + 1;
     if (nextIndex < dynamicConfig.steps.length) {
       // Dynamic Wording: If transitioning to step 2, adjust wording based on whether an asset was provided
@@ -123,36 +147,35 @@ export default function AgentChatCanvasPage() {
   };
 
   const handleEditStep = (stepId: string) => {
-    const stepIndex = dynamicConfig.steps.findIndex(s => s.id === stepId);
-    if (stepIndex === -1) return;
+    const mode = dynamicConfig.interactionMode || 'mode_a';
     
-    // Reset index
-    setCurrentStepIndex(stepIndex);
-    setPhase('chatting');
-    
-    // Remove answers for this step and subsequent steps
-    const stepsToRemove = dynamicConfig.steps.slice(stepIndex).map(s => s.id);
-    setAnswers(prev => {
-      const next = { ...prev };
-      stepsToRemove.forEach(id => delete next[id]);
-      return next;
-    });
-    
-    // Remove messages that are associated with this step or later
-    setMessages(prev => {
-      const idx = prev.findIndex(m => m.stepId && stepsToRemove.includes(m.stepId));
-      if (idx !== -1) {
-        // Remove the prompt message right before this user answer as well?
-        // Actually, the prompt might not have stepId.
-        // It's safer to just slice from idx (the user's answer), but wait:
-        // When we reset currentStepIndex, the ChatPanel will re-render the input card for that step.
-        // But what about the Agent's question for that step? If it's already in the messages, we should keep it.
-        // Wait, the agent's questions aren't pushed to `messages` array! They are rendered via `currentStep`.
-        // Only the Welcome Message is in `messages`.
-        return prev.slice(0, idx);
-      }
-      return prev;
-    });
+    if (mode === 'mode_a') {
+      // 方案A：破坏性回退（清除后面的所有答案和气泡）
+      const stepIndex = dynamicConfig.steps.findIndex(s => s.id === stepId);
+      if (stepIndex === -1) return;
+      
+      setCurrentStepIndex(stepIndex);
+      setPhase('chatting');
+      
+      const stepsToRemove = dynamicConfig.steps.slice(stepIndex).map(s => s.id);
+      setAnswers(prev => {
+        const next = { ...prev };
+        stepsToRemove.forEach(id => delete next[id]);
+        return next;
+      });
+      
+      setMessages(prev => {
+        const idx = prev.findIndex(m => m.stepId && stepsToRemove.includes(m.stepId));
+        if (idx !== -1) {
+          return prev.slice(0, idx);
+        }
+        return prev;
+      });
+    } else {
+      // 方案B/C：非破坏性回退（直接原地激活该卡片，保留后续答案）
+      setEditingStepId(stepId);
+      setPhase('chatting');
+    }
   };
 
   const handleConfirmExecute = async () => {
@@ -299,6 +322,7 @@ export default function AgentChatCanvasPage() {
           onEditStep={handleEditStep}
           onConfirmExecute={handleConfirmExecute}
           answers={answers}
+          editingStepId={editingStepId}
         />
       </div>
 
