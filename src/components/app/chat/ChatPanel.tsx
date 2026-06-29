@@ -53,7 +53,7 @@ export default function ChatPanel({ config, messages, currentStepIndex, phase, o
         ref={scrollRef}
         className="flex-1 overflow-y-auto px-6 py-6 custom-scrollbar space-y-6"
       >
-        {messages.map((msg) => (
+        {messages.filter(msg => config.interactionMode === 'mode_a' || msg.role === 'agent').map((msg) => (
           <ChatMessage 
             key={msg.id} 
             message={msg} 
@@ -62,6 +62,23 @@ export default function ChatPanel({ config, messages, currentStepIndex, phase, o
             onEdit={onEditStep}
           />
         ))}
+
+        {(config.interactionMode === 'mode_b' || config.interactionMode === 'mode_c') && (
+          config.steps.slice(0, currentStepIndex).map((step) => {
+            const answer = answers[step.id];
+            if (!answer) return null;
+            return (
+              <ChatInputCard 
+                key={step.id} 
+                step={step} 
+                onSubmit={onAnswer} 
+                completed={true} 
+                answer={answer} 
+                onEdit={() => onEditStep && onEditStep(step.id)} 
+              />
+            );
+          })
+        )}
 
         {phase === 'confirming' && (
           <div className="flex flex-col gap-4 w-[90%] bg-white border border-[#E5E5E5] rounded-[20px] p-5 shadow-sm animate-in fade-in slide-in-from-bottom-4 duration-500">

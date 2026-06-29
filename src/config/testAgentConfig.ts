@@ -36,24 +36,6 @@ export const TEST_CHAT_AGENT_CONFIG: AgentChatConfig = {
       uploadHint: '点击或拖拽上传产品图',
       required: true,
     },
-    {
-      id: 'reference-url',
-      type: 'url',
-      question: '有没有参考视频或品牌链接？（可跳过）',
-      hint: '提供参考可以让生成结果更贴合你的风格',
-      placeholder: 'https://example.com/reference',
-      required: false,
-    },
-    {
-      id: 'selling-point',
-      type: 'text',
-      question: '最后，用一句话描述你这次最想传达的卖点。',
-      hint: '比如：「补水不黏腻，夏天通勤 10 秒上脸就能出门」',
-      placeholder: '输入你的核心卖点...',
-      maxLength: 200,
-      rows: 3,
-      required: true,
-    },
   ],
 
   canvas: {

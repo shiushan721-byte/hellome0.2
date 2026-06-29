@@ -1,14 +1,17 @@
 import { useState, useRef } from 'react';
-import { UploadCloud, Link as LinkIcon, Send } from 'lucide-react';
+import { UploadCloud, Link as LinkIcon, Send, Edit2, CheckCircle2 } from 'lucide-react';
 import type { ChatStep, StepAnswer } from '../../../types/agentChatConfig';
 
 interface Props {
   step: ChatStep;
   onSubmit: (answer: StepAnswer) => void;
   disabled?: boolean;
+  completed?: boolean;
+  answer?: StepAnswer;
+  onEdit?: () => void;
 }
 
-export default function ChatInputCard({ step, onSubmit, disabled }: Props) {
+export default function ChatInputCard({ step, onSubmit, disabled, completed, answer, onEdit }: Props) {
   const [textValue, setTextValue] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -28,6 +31,34 @@ export default function ChatInputCard({ step, onSubmit, disabled }: Props) {
       handleSubmitValue(`[文件] ${file.name}`, url, file.name);
     }
   };
+
+  if (completed && answer) {
+    return (
+      <div className="w-full rounded-[20px] bg-white border border-black/10 p-4 shadow-sm mt-4 group transition-all">
+        <div className="flex items-start justify-between">
+          <div className="flex flex-col gap-1.5">
+            <h3 className="text-[13px] font-medium text-black/50 flex items-center gap-1.5">
+              <CheckCircle2 className="w-4 h-4 text-[#0F766E]" />
+              {step.question.split('\n')[0]}
+            </h3>
+            <p className="text-[15px] font-semibold text-[#1A1A1A] pl-5">
+              {answer.value || (answer.filePreviewUrl ? '🖼️ [已上传图片]' : '(跳过)')}
+            </p>
+          </div>
+          {onEdit && (
+            <button
+              onClick={onEdit}
+              className="p-2 rounded-lg text-black/40 hover:text-black hover:bg-black/5 opacity-0 group-hover:opacity-100 transition-all flex items-center gap-1.5"
+              title="修改"
+            >
+              <Edit2 className="w-4 h-4" />
+              <span className="text-[12px] font-medium">修改</span>
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full rounded-[24px] bg-white border border-black/10 p-5 shadow-sm mt-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
