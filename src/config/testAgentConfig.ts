@@ -17,6 +17,7 @@ export const TEST_CHAT_AGENT_CONFIG: AgentChatConfig = {
   welcomeMessage:
     '你好！我是品牌视频智能体 🎬\n\n我会通过几个简单的问题了解你的需求，然后为你生成一段品牌短视频样片。\n\n让我们开始吧 👇',
 
+  steps: [
     {
       id: 'brand-type',
       type: 'select',
