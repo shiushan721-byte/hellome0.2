@@ -108,10 +108,11 @@ export default function ChatPanel({ config, messages, currentStepIndex, phase, o
         {phase === 'confirming' && (
           <div className="flex flex-col gap-4 w-[90%] bg-white border border-[#E5E5E5] rounded-[20px] p-5 shadow-sm animate-in fade-in slide-in-from-bottom-4 duration-500">
             <h3 className="text-[15px] font-bold text-black flex items-center gap-2">
-              <span className="text-xl">📋</span> 请最后核对以下参数
+              <span className="text-xl">📋</span> 
+              {(config.interactionMode === 'mode_a' || !config.interactionMode) ? '请最后核对以下参数' : '全部配置已就绪'}
             </h3>
             <div className="flex flex-col gap-3">
-              {config.steps.map((step, idx) => {
+              {(config.interactionMode === 'mode_a' || !config.interactionMode) && config.steps.map((step, idx) => {
                 const answer = answers[step.id];
                 if (!answer) return null;
                 return (
