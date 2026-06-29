@@ -71,18 +71,14 @@ export default function App() {
         <Route path="agents/market" element={<Navigate to="/app/agents" replace />} />
         <Route path="agents/mine" element={<Navigate to="/app/agents" replace />} />
         <Route path="agents/geo" element={<GeoAgentPage />} />
-        <Route path="agents/media" element={<UgcVideoAgentPage />} />
-        <Route path="agents/media-seeding" element={<UgcVideoAgentPage />} />
-        <Route path="agents/media-review" element={<UgcVideoAgentPage />} />
-        <Route path="agents/media-conversion" element={<UgcVideoAgentPage />} />
-        <Route path="agents/media-showcase" element={<UgcVideoAgentPage />} />
-        <Route path="agents/media-demo" element={<UgcVideoAgentPage />} />
-        <Route path="agents/media-proposal" element={<UgcVideoAgentPage />} />
+        <Route path="agents/media" element={<AgentChatCanvasPage />} />
+        <Route path="agents/media-seeding" element={<AgentChatCanvasPage />} />
+        <Route path="agents/media-review" element={<AgentChatCanvasPage />} />
+        <Route path="agents/media-conversion" element={<AgentChatCanvasPage />} />
+        <Route path="agents/media-showcase" element={<AgentChatCanvasPage />} />
+        <Route path="agents/media-demo" element={<AgentChatCanvasPage />} />
+        <Route path="agents/media-proposal" element={<AgentChatCanvasPage />} />
         <Route path="agents/sales" element={<AgentComingSoonPage agentId="sales" />} />
-        
-        {/* 新增独立入口：画布视频智能体 */}
-        <Route path="agents/canvas" element={<AgentChatCanvasPage />} />
-
         <Route path="agents/:agentId" element={<AgentLauncherPage />} />
         <Route path="agents-legacy" element={<AgentsLegacyRedirect />} />
         <Route path="projects" element={<ProjectsPage />} />

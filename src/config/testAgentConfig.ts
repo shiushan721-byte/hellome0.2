@@ -96,7 +96,6 @@ export const TEST_CHAT_AGENT_CONFIG: AgentChatConfig = {
 export const CHAT_AGENT_CONFIGS: Record<string, AgentChatConfig> = {
   'test-chat': TEST_CHAT_AGENT_CONFIG,
   'video-hermes': VIDEO_HERMES_AGENT_CONFIG,
-  'canvas-video': TEST_CHAT_AGENT_CONFIG,
 };
 
 // 动态注册 6 个细分视频场景

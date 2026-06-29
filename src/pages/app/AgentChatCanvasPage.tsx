@@ -15,11 +15,18 @@ export interface TaskRun {
   status: string;
 }
 
+function resolveUgcAgentId(pathname: string): string {
+  const match = pathname.match(/\/agents\/(media(?:-[a-z]+)?)/);
+  return match ? match[1] : 'media';
+}
+
 export default function AgentChatCanvasPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const searchParams = new URLSearchParams(location.search);
-  const agentId = searchParams.get('id') || 'canvas-video';
+  
+  const routeAgentId = resolveUgcAgentId(location.pathname);
+  const agentId = searchParams.get('id') || routeAgentId;
   
   const baseConfig = getChatAgentConfig(agentId);
 

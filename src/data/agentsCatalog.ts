@@ -29,7 +29,7 @@ export const RANKING_SECTIONS = [
     gradient: 'from-amber-50 via-yellow-50/80 to-orange-50',
     accent: 'text-amber-500',
     decor: '👍',
-    agentIds: ['canvas-video', 'geo', 'media-seeding', 'schema-optimizer'],
+    agentIds: ['geo', 'media-seeding', 'schema-optimizer'],
   },
   {
     id: 'popular',
@@ -52,21 +52,6 @@ export const RANKING_SECTIONS = [
 ] as const;
 
 export const AGENTS: AgentItem[] = [
-  {
-    id: 'canvas-video',
-    name: '真·画布视频管家',
-    desc: '拥有多代保留和无限白板视觉体验的智能 UGC 视频生成管家。',
-    tokenRange: '10,000-50,000 Token',
-    category: 'media',
-    creator: 'hz-hermes',
-    creatorAvatar: 'https://api.dicebear.com/9.x/shapes/svg?seed=canvas',
-    heat: '98k+',
-    likes: '4.9',
-    iconSrc: AGENT_ICONS.media,
-    available: true,
-    path: '/app/agents/canvas',
-    badge: 'NEW',
-  },
   {
     id: 'geo',
     name: 'GEO 智能体',
