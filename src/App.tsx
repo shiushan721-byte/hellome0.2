@@ -12,6 +12,7 @@ import GeoAgentPage from './pages/app/GeoAgentPage';
 import AgentComingSoonPage from './pages/app/AgentComingSoonPage';
 import AgentLauncherPage from './pages/app/AgentLauncherPage';
 import UgcVideoAgentPage from './pages/app/UgcVideoAgentPage';
+import AgentChatCanvasPage from './pages/app/AgentChatCanvasPage';
 import ProjectsPage from './pages/app/ProjectsPage';
 import TasksPage from './pages/app/TasksPage';
 import TaskRunPage from './pages/app/TaskRunPage';
@@ -78,6 +79,10 @@ export default function App() {
         <Route path="agents/media-demo" element={<UgcVideoAgentPage />} />
         <Route path="agents/media-proposal" element={<UgcVideoAgentPage />} />
         <Route path="agents/sales" element={<AgentComingSoonPage agentId="sales" />} />
+        
+        {/* 新增独立入口：画布视频智能体 */}
+        <Route path="agents/canvas" element={<AgentChatCanvasPage />} />
+
         <Route path="agents/:agentId" element={<AgentLauncherPage />} />
         <Route path="agents-legacy" element={<AgentsLegacyRedirect />} />
         <Route path="projects" element={<ProjectsPage />} />

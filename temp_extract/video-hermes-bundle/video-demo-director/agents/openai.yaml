@@ -1,0 +1,4 @@
+interface:
+  display_name: "Video Demo Director"
+  short_description: "Plan product demos and screen-based walkthrough videos."
+  default_prompt: "Use -demo-director to turn this product or workflow into a clear video demo plan."

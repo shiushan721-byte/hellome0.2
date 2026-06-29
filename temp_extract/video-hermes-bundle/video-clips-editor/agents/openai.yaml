@@ -1,0 +1,4 @@
+interface:
+  display_name: "Video Clips Editor"
+  short_description: "Cut long-form media into short social clips."
+  default_prompt: "Use -clips-editor to turn this long-form recording into strong short-form clips."

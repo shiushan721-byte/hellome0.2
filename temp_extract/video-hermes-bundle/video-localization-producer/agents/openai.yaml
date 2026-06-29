@@ -1,0 +1,4 @@
+interface:
+  display_name: "Video Localization Producer"
+  short_description: "Plan translated subtitle, dub, and localized video versions."
+  default_prompt: "Use -localization-producer to adapt this video into another language."

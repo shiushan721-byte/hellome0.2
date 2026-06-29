@@ -1,0 +1,4 @@
+interface:
+  display_name: "Video Hermes Integration"
+  short_description: "Prompt templates for running the video skill system in Hermes."
+  default_prompt: "Use -hermes-integration to wire the reusable video skill system into Hermes."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Video Story Editor"
+  short_description: "Plan cinematic, montage-led, and mood-first video structure."
+  default_prompt: "Use -story-editor to shape this material into a cinematic or mood-led video plan."
