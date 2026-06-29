@@ -120,38 +120,35 @@ export default function CanvasPanel({ config, phase, runs }: Props) {
   return (
     <div 
       ref={containerRef}
-      className="w-full h-full relative overflow-hidden bg-[#F8F9FB] select-none touch-none cursor-grab active:cursor-grabbing"
+      className="w-full h-full relative overflow-hidden bg-[#090A0B] select-none touch-none cursor-grab active:cursor-grabbing"
       onWheel={handleWheel}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
-      onPointerCancel={handlePointerUp}
-      className="relative flex-1 bg-[#090A0B] overflow-hidden" 
-      onWheel={handleWheel} 
-      onPointerDown={handlePointerDown} 
-      onPointerMove={handlePointerMove} 
-      onPointerUp={handlePointerUp} 
       onPointerLeave={handlePointerUp}
+      onPointerCancel={handlePointerUp}
     >
       <div className="absolute inset-0 z-0 pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, rgba(255,255,255,0.05) 1px, transparent 0)', backgroundSize: '32px 32px' }} />
+      
+      {/* UI Controls overlay (MUST be outside the zoomed canvas) */}
+      <div className="absolute bottom-6 right-6 z-50 flex gap-2">
+        <button 
+          onClick={centerView}
+          className="px-4 py-2 bg-white/5 border border-white/10 rounded-full shadow-sm text-[12px] font-medium text-white/60 hover:bg-white/10 transition-colors backdrop-blur-md"
+        >
+          居中最新版本
+        </button>
+      </div>
+
       <div 
         className={`absolute inset-0 origin-top-left z-10 ${isDragging ? '' : 'transition-transform duration-500 ease-out'}`}
         style={{ transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})` }}
       >
-
-        {/* UI Controls overlay */}
-        <div className="absolute bottom-6 right-6 z-50 flex gap-2">
-          <button 
-            onClick={centerView}
-            className="px-4 py-2 bg-white/5 border border-white/10 rounded-full shadow-sm text-[12px] font-medium text-white/60 hover:bg-white/10 transition-colors"
-          >
-            居中最新版本
-          </button>
-        </div>
         
         {/* Node: Idle/Welcome (Center) */}
         {runs.length === 0 && (
           <div className="absolute canvas-node" style={{ transform: 'translate(-50%, -50%)' }}>
+            <div className="w-[360px] bg-white/5 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/10 p-8 text-center flex flex-col items-center">
               <div className="h-20 w-20 bg-white/10 rounded-3xl flex items-center justify-center text-4xl mb-4 shadow-inner">
                 {config.icon}
               </div>
