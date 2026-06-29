@@ -96,6 +96,9 @@ export const TEST_CHAT_AGENT_CONFIG: AgentChatConfig = {
 export const CHAT_AGENT_CONFIGS: Record<string, AgentChatConfig> = {
   'test-chat': TEST_CHAT_AGENT_CONFIG,
   'video-hermes': VIDEO_HERMES_AGENT_CONFIG,
+  'canvas-demo-a': { ...TEST_CHAT_AGENT_CONFIG, id: 'canvas-demo-a', name: '方案 A (集中确认体验馆)', interactionMode: 'mode_a' },
+  'canvas-demo-b': { ...TEST_CHAT_AGENT_CONFIG, id: 'canvas-demo-b', name: '方案 B (独立可改体验馆)', interactionMode: 'mode_b' },
+  'canvas-demo-c': { ...TEST_CHAT_AGENT_CONFIG, id: 'canvas-demo-c', name: '方案 C (混合体验馆)', interactionMode: 'mode_c' },
 };
 
 // 动态注册 6 个细分视频场景

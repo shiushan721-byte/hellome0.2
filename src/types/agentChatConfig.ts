@@ -78,11 +78,13 @@ export interface AgentChatConfig {
   steps: ChatStep[];
   /** Canvas 展示配置 */
   canvas: CanvasConfig;
+  /** 交互模式 (A: 集中确认, B: 独立可逆, C: 混合) */
+  interactionMode?: 'mode_a' | 'mode_b' | 'mode_c';
 }
 
 /* ────────────────────── 运行时状态 ────────────────────── */
 
-export type WorkflowPhase = 'idle' | 'chatting' | 'executing' | 'completed';
+export type WorkflowPhase = 'idle' | 'chatting' | 'confirming' | 'executing' | 'completed';
 
 export interface ChatMessage {
   id: string;

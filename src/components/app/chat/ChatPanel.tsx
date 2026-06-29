@@ -11,9 +11,12 @@ interface Props {
   phase: WorkflowPhase;
   onAnswer: (answer: StepAnswer) => void;
   onAction: (action: 'open_folder' | 'edit_request' | 'restart') => void;
+  onEditStep?: (stepId: string) => void;
+  onConfirmExecute?: () => void;
+  answers?: Record<string, StepAnswer>;
 }
 
-export default function ChatPanel({ config, messages, currentStepIndex, phase, onAnswer, onAction }: Props) {
+export default function ChatPanel({ config, messages, currentStepIndex, phase, onAnswer, onAction, onEditStep, onConfirmExecute, answers = {} }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -51,8 +54,53 @@ export default function ChatPanel({ config, messages, currentStepIndex, phase, o
         className="flex-1 overflow-y-auto px-6 py-6 custom-scrollbar space-y-6"
       >
         {messages.map((msg) => (
-          <ChatMessage key={msg.id} message={msg} agentIcon={config.icon} />
+          <ChatMessage 
+            key={msg.id} 
+            message={msg} 
+            agentIcon={config.icon} 
+            interactionMode={config.interactionMode}
+            onEdit={onEditStep}
+          />
         ))}
+
+        {phase === 'confirming' && (
+          <div className="flex flex-col gap-4 w-[90%] bg-white border border-[#E5E5E5] rounded-[20px] p-5 shadow-sm animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <h3 className="text-[15px] font-bold text-black flex items-center gap-2">
+              <span className="text-xl">📋</span> 请最后核对以下参数
+            </h3>
+            <div className="flex flex-col gap-3">
+              {config.steps.map((step, idx) => {
+                const answer = answers[step.id];
+                if (!answer) return null;
+                return (
+                  <div key={step.id} className="flex flex-col gap-1 text-[13px]">
+                    <div className="flex items-center justify-between">
+                      <span className="text-black/50 font-medium">Step {idx + 1}: {step.question.split('\n')[0]}</span>
+                      {(config.interactionMode === 'mode_a' || config.interactionMode === 'mode_c') && onEditStep && (
+                        <button 
+                          onClick={() => onEditStep(step.id)}
+                          className="text-[#0F766E] hover:underline text-[12px] font-medium"
+                        >
+                          修改
+                        </button>
+                      )}
+                    </div>
+                    <span className="text-black/80 font-medium bg-[#F5F5F7] px-3 py-2 rounded-lg">
+                      {answer.value || (answer.filePreviewUrl ? '🖼️ [已上传图片]' : '(跳过)')}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+            
+            <button
+              onClick={onConfirmExecute}
+              className="mt-2 w-full py-3 rounded-xl bg-[#0F766E] text-white text-[14px] font-bold shadow-sm hover:bg-[#0F766E]/90 transition-colors"
+            >
+              确认无误，开始生成视频
+            </button>
+          </div>
+        )}
 
         {phase === 'executing' && (
           <div className="flex items-start gap-3 w-full justify-start animate-in fade-in duration-500">

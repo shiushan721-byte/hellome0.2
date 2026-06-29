@@ -16,7 +16,7 @@ export interface TaskRun {
 }
 
 function resolveUgcAgentId(pathname: string): string {
-  const match = pathname.match(/\/agents\/(media(?:-[a-z]+)?)/);
+  const match = pathname.match(/\/agents\/(media(?:-[a-z]+)?|canvas-demo-[abc])/);
   return match ? match[1] : 'media';
 }
 
@@ -109,10 +109,55 @@ export default function AgentChatCanvasPage() {
       // Proceed to next step
       setCurrentStepIndex(nextIndex);
     } else {
-      // All steps completed, start execution
-      setPhase('executing');
-      await startHermesExecution(newAnswers);
+      // All steps completed
+      const mode = dynamicConfig.interactionMode || 'mode_a';
+      if (mode === 'mode_b') {
+        // Mode B: auto execute
+        setPhase('executing');
+        await startHermesExecution(newAnswers);
+      } else {
+        // Mode A/C: wait for confirmation
+        setPhase('confirming');
+      }
     }
+  };
+
+  const handleEditStep = (stepId: string) => {
+    const stepIndex = dynamicConfig.steps.findIndex(s => s.id === stepId);
+    if (stepIndex === -1) return;
+    
+    // Reset index
+    setCurrentStepIndex(stepIndex);
+    setPhase('chatting');
+    
+    // Remove answers for this step and subsequent steps
+    const stepsToRemove = dynamicConfig.steps.slice(stepIndex).map(s => s.id);
+    setAnswers(prev => {
+      const next = { ...prev };
+      stepsToRemove.forEach(id => delete next[id]);
+      return next;
+    });
+    
+    // Remove messages that are associated with this step or later
+    setMessages(prev => {
+      const idx = prev.findIndex(m => m.stepId && stepsToRemove.includes(m.stepId));
+      if (idx !== -1) {
+        // Remove the prompt message right before this user answer as well?
+        // Actually, the prompt might not have stepId.
+        // It's safer to just slice from idx (the user's answer), but wait:
+        // When we reset currentStepIndex, the ChatPanel will re-render the input card for that step.
+        // But what about the Agent's question for that step? If it's already in the messages, we should keep it.
+        // Wait, the agent's questions aren't pushed to `messages` array! They are rendered via `currentStep`.
+        // Only the Welcome Message is in `messages`.
+        return prev.slice(0, idx);
+      }
+      return prev;
+    });
+  };
+
+  const handleConfirmExecute = async () => {
+    setPhase('executing');
+    await startHermesExecution(answers);
   };
 
   const startHermesExecution = async (finalAnswers: Record<string, StepAnswer>) => {
@@ -251,6 +296,9 @@ export default function AgentChatCanvasPage() {
           phase={phase}
           onAnswer={handleAnswer}
           onAction={handleAction}
+          onEditStep={handleEditStep}
+          onConfirmExecute={handleConfirmExecute}
+          answers={answers}
         />
       </div>
 
