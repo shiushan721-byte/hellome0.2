@@ -102,9 +102,26 @@ export default function ChatPanel({ config, messages, currentStepIndex, phase, o
                         </button>
                       )}
                     </div>
-                    <span className="text-black/80 font-medium bg-[#F5F5F7] px-3 py-2 rounded-lg">
-                      {answer.value || (answer.filePreviewUrl ? '🖼️ [已上传图片]' : '(跳过)')}
-                    </span>
+                    <div className="bg-[#F5F5F7] px-3 py-2 rounded-lg">
+                      {answer.filePreviewUrl ? (
+                        <div className="flex items-center gap-2">
+                          <div className="h-8 w-8 rounded-md bg-black/5 overflow-hidden shrink-0 flex items-center justify-center">
+                            {answer.filePreviewUrl.match(/\.(jpeg|jpg|gif|png|webp|svg)$/i) || answer.filePreviewUrl.startsWith('blob:') ? (
+                              <img src={answer.filePreviewUrl} alt="uploaded" className="h-full w-full object-cover" />
+                            ) : (
+                              <span className="text-[10px] text-black/40">文件</span>
+                            )}
+                          </div>
+                          <span className="text-black/80 font-medium truncate max-w-[150px]">
+                            {answer.fileName || '已上传文件'}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-black/80 font-medium">
+                          {answer.value || '(跳过)'}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 );
               })}

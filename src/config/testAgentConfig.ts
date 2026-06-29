@@ -17,7 +17,6 @@ export const TEST_CHAT_AGENT_CONFIG: AgentChatConfig = {
   welcomeMessage:
     '你好！我是品牌视频智能体 🎬\n\n我会通过几个简单的问题了解你的需求，然后为你生成一段品牌短视频样片。\n\n让我们开始吧 👇',
 
-  steps: [
     {
       id: 'brand-type',
       type: 'select',
@@ -27,13 +26,39 @@ export const TEST_CHAT_AGENT_CONFIG: AgentChatConfig = {
       required: true,
     },
     {
+      id: 'target-audience',
+      type: 'select',
+      question: '这个视频主要是想播给谁看？',
+      hint: '目标人群会影响最终视频的节奏和配乐',
+      options: ['年轻学生党', '都市白领', '宝妈/家庭', '全年龄段通用'],
+      required: true,
+    },
+    {
       id: 'product-image',
       type: 'upload',
-      question: '请上传一张产品图或门店图，作为视频的基础素材。',
+      question: '请上传一张产品图或门店环境图。',
       hint: '支持 JPG / PNG / WebP，不超过 10MB',
       accept: 'image/jpeg,image/png,image/webp',
       maxSizeMb: 10,
-      uploadHint: '点击或拖拽上传产品图',
+      uploadHint: '点击或拖拽上传图片',
+      required: true,
+    },
+    {
+      id: 'reference-url',
+      type: 'url',
+      question: '有没有想要对标的爆款视频链接？（选填）',
+      hint: '小红书或抖音的分享链接，帮助我模仿它的剪辑网感',
+      placeholder: 'https://...',
+      required: false,
+    },
+    {
+      id: 'selling-point',
+      type: 'text',
+      question: '最后，请一句话概括你想在视频里突出的“核心卖点”。',
+      hint: '比如：「补水不黏腻，夏天通勤10秒出门」',
+      placeholder: '输入你的核心卖点...',
+      maxLength: 100,
+      rows: 2,
       required: true,
     },
   ],
