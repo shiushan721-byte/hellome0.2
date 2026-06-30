@@ -471,6 +471,7 @@ model Agent {
   slug                    String              @unique
   name                    String
   description             String
+  detailHtml              String?
   iconUrl                 String
   category                String?
   tags                    Json?

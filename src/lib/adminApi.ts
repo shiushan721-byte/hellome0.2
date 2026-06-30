@@ -192,7 +192,7 @@ export const adminApi = {
   agent: (agentId: string) => requestJson<import('../types/adminAgent').AdminAgentDetail>(`/api/admin/agents/${agentId}`),
   updateAgent: (
     agentId: string,
-    body: { name?: string; description?: string; iconUrl?: string; category?: string },
+    body: { name?: string; description?: string; detailHtml?: string; iconUrl?: string; category?: string },
   ) =>
     requestJson(`/api/admin/agents/${agentId}`, {
       method: 'PUT',

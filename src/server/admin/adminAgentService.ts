@@ -32,6 +32,7 @@ function toRecord(agent: MemoryAgent): AdminAgentRecord {
     slug: agent.slug,
     name: agent.name,
     description: agent.description,
+    detailHtml: agent.detailHtml ?? null,
     iconUrl: agent.iconUrl,
     category: agent.category,
     tags: agent.tags,
@@ -54,6 +55,7 @@ function prismaAgentToRecord(row: any, packageCount: number, currentVersion: str
     slug: row.slug,
     name: row.name,
     description: row.description,
+    detailHtml: row.detailHtml ?? null,
     iconUrl: row.iconUrl,
     category: row.category ?? null,
     tags: Array.isArray(row.tags) ? (row.tags as string[]) : null,
@@ -173,6 +175,7 @@ export async function createAdminAgentWithPackage(input: {
   iconUrl: string;
   name: string;
   description: string;
+  detailHtml?: string;
   category?: string;
   version: string;
   releaseNote?: string;
@@ -200,6 +203,7 @@ export async function createAdminAgentWithPackage(input: {
         slug,
         name: profile.name,
         description: profile.description,
+        detailHtml: input.detailHtml?.trim() || null,
         iconUrl: input.iconUrl,
         category: input.category?.trim() || null,
         status: 'offline',
@@ -263,6 +267,7 @@ export async function createAdminAgentWithPackage(input: {
     slug,
     name: profile.name,
     description: profile.description,
+    detailHtml: input.detailHtml?.trim() || null,
     iconUrl: input.iconUrl,
     category: input.category?.trim() || null,
     tags: null,
@@ -288,6 +293,7 @@ export async function updateAdminAgent(
     actorId: string;
     name?: string;
     description?: string;
+    detailHtml?: string;
     iconUrl?: string;
     category?: string;
   },
@@ -308,6 +314,7 @@ export async function updateAdminAgent(
       data: {
         name: profile.name,
         description: profile.description,
+        detailHtml: input.detailHtml?.trim() || null,
         iconUrl: input.iconUrl?.trim() || detail.iconUrl,
         category: input.category?.trim() || detail.category,
         updatedBy: input.actorId,
@@ -320,6 +327,7 @@ export async function updateAdminAgent(
   if (!agent) throw new Error('智能体不存在');
   agent.name = profile.name;
   agent.description = profile.description;
+  if (input.detailHtml !== undefined) agent.detailHtml = input.detailHtml?.trim() || null;
   if (input.iconUrl?.trim()) agent.iconUrl = input.iconUrl.trim();
   if (input.category !== undefined) agent.category = input.category?.trim() || null;
   agent.updatedBy = input.actorId;
@@ -501,6 +509,7 @@ export async function listOnlineAgentsForMarket(): Promise<PublishedAgentMarketI
           slug: row.slug,
           name: row.name,
           description: row.description,
+          detailHtml: row.detailHtml ?? null,
           iconUrl: row.iconUrl,
           category: row.category,
           status: 'online' as const,
@@ -519,6 +528,7 @@ export async function listOnlineAgentsForMarket(): Promise<PublishedAgentMarketI
       slug: agent.slug,
       name: agent.name,
       description: agent.description,
+      detailHtml: agent.detailHtml ?? null,
       iconUrl: agent.iconUrl,
       category: agent.category,
       status: 'online' as const,

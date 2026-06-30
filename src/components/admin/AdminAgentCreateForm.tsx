@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { adminApi } from '../../lib/adminApi';
 import { AdminCard, adminBtnPrimaryClass, adminInputClass } from '../../components/admin/AdminUi';
+import AdminRichTextEditor from './AdminRichTextEditor';
 
 type AdminAgentCreateFormProps = {
   onCreated: (slug: string) => void;
@@ -9,7 +10,7 @@ type AdminAgentCreateFormProps = {
 export default function AdminAgentCreateForm({ onCreated }: AdminAgentCreateFormProps) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [category, setCategory] = useState('');
+  const [detailHtml, setDetailHtml] = useState('');
   const [version, setVersion] = useState('1.0.0');
   const [releaseNote, setReleaseNote] = useState('');
   const [iconFile, setIconFile] = useState<File | null>(null);
@@ -35,8 +36,8 @@ export default function AdminAgentCreateForm({ onCreated }: AdminAgentCreateForm
       formData.append('package', packageFile);
       formData.append('name', name.trim());
       formData.append('description', description.trim());
+      if (detailHtml.trim()) formData.append('detailHtml', detailHtml.trim());
       formData.append('version', version.trim() || '1.0.0');
-      if (category.trim()) formData.append('category', category.trim());
       if (releaseNote.trim()) formData.append('releaseNote', releaseNote.trim());
 
       const created = (await adminApi.createAgentUpload(formData)) as { slug?: string; id?: string };
@@ -90,10 +91,10 @@ export default function AdminAgentCreateForm({ onCreated }: AdminAgentCreateForm
           />
         </label>
 
-        <label className="block space-y-1.5">
-          <span className="text-sm font-medium text-[#111]">分类</span>
-          <input className={adminInputClass} value={category} onChange={(e) => setCategory(e.target.value)} />
-        </label>
+        <div className="space-y-1.5">
+          <span className="text-sm font-medium text-[#111]">详细描述</span>
+          <AdminRichTextEditor value={detailHtml} onChange={setDetailHtml} />
+        </div>
 
         <label className="block space-y-1.5">
           <span className="text-sm font-medium text-[#111]">版本号</span>

@@ -110,7 +110,7 @@ export function registerAdminAgentRoutes(
           iconUrl: saveIconFile(iconFile),
           name: String(req.body?.name ?? ''),
           description: String(req.body?.description ?? ''),
-          category: String(req.body?.category ?? '').trim() || undefined,
+          detailHtml: String(req.body?.detailHtml ?? '').trim() || undefined,
           version: String(req.body?.version ?? '1.0.0'),
           releaseNote: String(req.body?.releaseNote ?? '').trim() || undefined,
           packagePath: packageFile.path,
@@ -142,8 +142,8 @@ export function registerAdminAgentRoutes(
         actorId: actorFromSession(session).id,
         name: req.body?.name,
         description: req.body?.description,
+        detailHtml: req.body?.detailHtml,
         iconUrl: req.body?.iconUrl,
-        category: req.body?.category,
       });
       await writeAuditLog(
         auditFromRequest(req, actorFromSession(session), {

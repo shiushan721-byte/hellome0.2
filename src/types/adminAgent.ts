@@ -26,6 +26,7 @@ export type AdminAgentRecord = {
   slug: string;
   name: string;
   description: string;
+  detailHtml: string | null;
   iconUrl: string;
   category: string | null;
   tags: string[] | null;
@@ -51,6 +52,7 @@ export type PublishedAgentMarketItem = {
   slug: string;
   name: string;
   description: string;
+  detailHtml: string | null;
   iconUrl: string;
   category: string | null;
   status: 'online';

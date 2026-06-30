@@ -10,8 +10,9 @@ import {
   adminInputClass,
   adminTabClass,
 } from '../../components/admin/AdminUi';
+import AdminRichTextEditor from './AdminRichTextEditor';
 
-type DetailTab = 'profile' | 'packages' | 'validation' | 'preview' | 'audit';
+type DetailTab = 'profile' | 'packages' | 'validation' | 'audit';
 
 function statusLabel(status: string) {
   if (status === 'online') return '上架';
@@ -36,7 +37,7 @@ export default function AdminAgentDetailPanel({ skillId, onChanged }: AdminAgent
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [category, setCategory] = useState('');
+  const [detailHtml, setDetailHtml] = useState('');
   const [iconUrl, setIconUrl] = useState('');
   const [iconUploading, setIconUploading] = useState(false);
 
@@ -53,7 +54,7 @@ export default function AdminAgentDetailPanel({ skillId, onChanged }: AdminAgent
     setAgent(data);
     setName(data.name);
     setDescription(data.description);
-    setCategory(data.category ?? '');
+    setDetailHtml(data.detailHtml ?? '');
     setIconUrl(data.iconUrl);
   };
 
@@ -88,7 +89,7 @@ export default function AdminAgentDetailPanel({ skillId, onChanged }: AdminAgent
     await adminApi.updateAgent(agent.id, {
       name: name.trim(),
       description: description.trim(),
-      category: category.trim() || undefined,
+      detailHtml: detailHtml.trim() || undefined,
       iconUrl: iconUrl.trim() || undefined,
     });
   };
@@ -141,7 +142,6 @@ export default function AdminAgentDetailPanel({ skillId, onChanged }: AdminAgent
             { id: 'profile' as const, label: '基础信息' },
             { id: 'packages' as const, label: '技能包版本' },
             { id: 'validation' as const, label: '校验记录' },
-            { id: 'preview' as const, label: '前台预览' },
             { id: 'audit' as const, label: '操作日志' },
           ] as const
         ).map((item) => (
@@ -228,15 +228,10 @@ export default function AdminAgentDetailPanel({ skillId, onChanged }: AdminAgent
             />
           </label>
 
-          <label className="block space-y-1">
-            <span className="text-sm text-black/50">分类</span>
-            <input
-              className={adminInputClass}
-              value={category}
-              disabled={readonly}
-              onChange={(e) => setCategory(e.target.value)}
-            />
-          </label>
+          <div className="block space-y-1">
+            <span className="text-sm text-black/50">详细描述</span>
+            <AdminRichTextEditor value={detailHtml} disabled={readonly} onChange={setDetailHtml} />
+          </div>
 
           {!readonly ? (
             <button
@@ -370,32 +365,6 @@ export default function AdminAgentDetailPanel({ skillId, onChanged }: AdminAgent
               { key: 'checksum', label: 'Checksum' },
             ]}
           />
-        </AdminCard>
-      ) : null}
-
-      {tab === 'preview' ? (
-        <AdminCard className="p-5 max-w-sm">
-          <div className="rounded-2xl border border-[#eee] bg-[#fafafa] p-4 space-y-3">
-            <div className="flex items-center gap-3">
-              {iconUrl ? (
-                <img src={iconUrl} alt="" className="w-12 h-12 rounded-xl object-cover" />
-              ) : catalogFallback?.iconSrc ? (
-                <img src={catalogFallback.iconSrc} alt="" className="w-12 h-12 rounded-xl object-cover" />
-              ) : (
-                <div className="w-12 h-12 rounded-xl bg-[#eee] flex items-center justify-center font-bold text-black/35">
-                  {name.trim()[0] || '?'}
-                </div>
-              )}
-              <div>
-                <p className="font-semibold text-[#111]">{name}</p>
-                <p className="text-xs text-black/45">{category || catalogFallback?.category || 'content'}</p>
-              </div>
-            </div>
-            <p className="text-sm text-black/60 leading-relaxed">{description}</p>
-            <p className="text-xs text-black/35">
-              {isOnline ? '上架后将在智能体市场展示' : '下架状态，前台不可见'}
-            </p>
-          </div>
         </AdminCard>
       ) : null}
 
