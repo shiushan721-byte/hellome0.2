@@ -1,0 +1,7 @@
+interface:
+  display_name: "Video Producer"
+  short_description: "Clarify, route, and package video production work."
+  default_prompt: "Use $video-producer to turn my rough idea into an execution-ready video production brief."
+
+policy:
+  allow_implicit_invocation: true

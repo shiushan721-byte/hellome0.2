@@ -68,7 +68,9 @@ export function buildFilteredMarketAgents(
 ): AgentMarketCard[] {
   let cards = buildMarketAgents();
   if (onlineSlugs !== null) {
-    cards = cards.filter((card) => onlineSlugs.has(card.id));
+    // 强制放行本地硬编码卡片
+    const LOCAL_WHITELIST = ['geo', 'media-legacy', 'sales', 'schema-optimizer', 'competitor-scan', 'hermes-report', 'faq-generator'];
+    cards = cards.filter((card) => onlineSlugs.has(card.id) || LOCAL_WHITELIST.includes(card.id));
   }
   return mergePublishedMarketAgents(cards, publishedAgents).map((card) => {
     const published = publishedAgents.find((item) => item.agentId === card.id);

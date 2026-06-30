@@ -12,6 +12,7 @@ import GeoAgentPage from './pages/app/GeoAgentPage';
 import AgentComingSoonPage from './pages/app/AgentComingSoonPage';
 import AgentLauncherPage from './pages/app/AgentLauncherPage';
 import UgcVideoAgentPage from './pages/app/UgcVideoAgentPage';
+import AgentChatCanvasPage from './pages/app/AgentChatCanvasPage';
 import ProjectsPage from './pages/app/ProjectsPage';
 import TaskRunPage from './pages/app/TaskRunPage';
 import UsagePage from './pages/app/UsagePage';
@@ -69,13 +70,22 @@ export default function App() {
         <Route path="agents/market" element={<Navigate to="/app/agents" replace />} />
         <Route path="agents/mine" element={<Navigate to="/app/agents" replace />} />
         <Route path="agents/geo" element={<GeoAgentPage />} />
-        <Route path="agents/media" element={<UgcVideoAgentPage />} />
-        <Route path="agents/media-seeding" element={<UgcVideoAgentPage />} />
-        <Route path="agents/media-review" element={<UgcVideoAgentPage />} />
-        <Route path="agents/media-conversion" element={<UgcVideoAgentPage />} />
-        <Route path="agents/media-showcase" element={<UgcVideoAgentPage />} />
-        <Route path="agents/media-demo" element={<UgcVideoAgentPage />} />
-        <Route path="agents/media-proposal" element={<UgcVideoAgentPage />} />
+        <Route path="agents/media" element={<AgentChatCanvasPage />} />
+        <Route path="agents/media-seeding" element={<AgentChatCanvasPage />} />
+        <Route path="agents/media-review" element={<AgentChatCanvasPage />} />
+        <Route path="agents/media-conversion" element={<AgentChatCanvasPage />} />
+        <Route path="agents/media-showcase" element={<AgentChatCanvasPage />} />
+        <Route path="agents/media-demo" element={<AgentChatCanvasPage />} />
+        <Route path="agents/media-proposal" element={<AgentChatCanvasPage />} />
+        
+        {/* 保留老版交互入口 */}
+        <Route path="agents/media-legacy" element={<UgcVideoAgentPage />} />
+
+        {/* 交互测试体验馆 */}
+        <Route path="agents/canvas-demo-a" element={<AgentChatCanvasPage />} />
+        <Route path="agents/canvas-demo-b" element={<AgentChatCanvasPage />} />
+        <Route path="agents/canvas-demo-c" element={<AgentChatCanvasPage />} />
+        
         <Route path="agents/sales" element={<AgentComingSoonPage agentId="sales" />} />
         <Route path="agents/:agentId" element={<AgentLauncherPage />} />
         <Route path="agents-legacy" element={<AgentsLegacyRedirect />} />

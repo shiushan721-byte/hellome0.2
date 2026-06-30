@@ -1,0 +1,4 @@
+interface:
+  display_name: "Video System Examples"
+  short_description: "Reference flows for the reusable video skill system."
+  default_prompt: "Use -system-examples to inspect example flows for this video skill system."

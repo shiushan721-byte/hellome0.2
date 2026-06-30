@@ -1,0 +1,4 @@
+interface:
+  display_name: "Video Style Translator"
+  short_description: "Turn reference videos into reusable style direction."
+  default_prompt: "Use -style-translator to extract usable style rules from this reference video."

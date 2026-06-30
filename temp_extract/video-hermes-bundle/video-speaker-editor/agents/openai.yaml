@@ -1,0 +1,4 @@
+interface:
+  display_name: "Video Speaker Editor"
+  short_description: "Polish talking-head and speaker-led video plans."
+  default_prompt: "Use -speaker-editor to turn this speaker-led footage into a polished video plan."

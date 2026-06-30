@@ -9,6 +9,7 @@ datasource db {
 enum TaskStatus {
   draft
   queued
+  awaiting_input
   running
   waiting_confirmation
   completed
@@ -91,6 +92,12 @@ model Task {
   skillId           String?
   skillVersionId    String?
   executionGrantId  String?           @unique
+  /// 🆕 v1.1: Hermes skill 返回的动态参数 schema (前端渲染用)
+  schemaPayload     Json?
+  /// 🆕 v1.1: schema 就绪时间,前端据此判断是否还在等 Hermes
+  schemaReadyAt     DateTime?
+  /// 🆕 v1.1: 用户填写的结构化答案 (替代原 TaskInput 7 字段扁平化)
+  structuredAnswers Json?
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
   startedAt         DateTime?

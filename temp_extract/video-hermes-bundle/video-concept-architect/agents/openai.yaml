@@ -1,0 +1,4 @@
+interface:
+  display_name: "Video Concept Architect"
+  short_description: "Shape rough video ideas into executable concepts."
+  default_prompt: "Use -concept-architect to turn this rough video idea into a production-ready concept."

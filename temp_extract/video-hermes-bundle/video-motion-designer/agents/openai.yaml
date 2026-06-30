@@ -1,0 +1,4 @@
+interface:
+  display_name: "Video Motion Designer"
+  short_description: "Plan animation-first and generated-visual video systems."
+  default_prompt: "Use -motion-designer to turn this idea into an animation-first video plan."
