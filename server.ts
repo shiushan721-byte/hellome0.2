@@ -40,15 +40,18 @@ import {
 import {
   cancelUgcTask,
   createUgcTask,
+  createUgcTaskWithSchema,
   deleteUgcTask,
   getHermesRuntimeStatus,
   getUgcTask,
   getUgcTaskEvents,
+  getUgcTaskSchema,
   isMediaTaskId,
   listUgcTasks,
   retryUgcTask,
   runHermesDebug,
   confirmUgcTask,
+  submitUgcTaskAnswers,
 } from './src/server/ugcTaskService';
 import {
   createExecutionGrant,
@@ -810,6 +813,103 @@ app.post('/api/tasks/ugc', async (req, res) => {
       success: false,
       error: error instanceof Error ? error.message : '创建 UGC 任务失败',
     });
+  }
+});
+
+// =============================================================================
+// v1.1: Schema-first 流程 (3 个新端点)
+// =============================================================================
+//
+// POST /api/tasks/ugc/v2 — 创建"等待参数"任务,异步调 Hermes 拿 schema
+// GET  /api/tasks/:id/schema — 前端 500ms-1s 轮询,直到 ready=true
+// POST /api/tasks/:id/answers — 提交结构化答案,触发老 executeUnderstandingPhase
+
+app.post('/api/tasks/ugc/v2', async (req, res) => {
+  try {
+    const { skillId, user, rawContext } = req.body as {
+      skillId?: string;
+      user?: {
+        externalId?: string;
+        displayName?: string;
+        email?: string;
+        phone?: string;
+        workspaceName?: string;
+      };
+      rawContext?: Record<string, unknown>;
+    };
+
+    if (!skillId?.trim()) {
+      res.status(400).json({ success: false, error: 'skillId 不能为空' });
+      return;
+    }
+
+    const task = await createUgcTaskWithSchema({
+      skillId: skillId.trim(),
+      userExternalId: user?.externalId?.trim() || 'local-user',
+      displayName: user?.displayName?.trim(),
+      email: user?.email?.trim(),
+      phone: user?.phone?.trim(),
+      workspaceName: user?.workspaceName?.trim() || '个人空间',
+      rawContext,
+    });
+
+    res.status(201).json({ success: true, data: task });
+  } catch (error) {
+    if (error instanceof PublishedSkillVersionRequiredError) {
+      res.status(409).json({ success: false, error: error.message });
+      return;
+    }
+    console.error('Failed to create UGC task (v2 schema-first):', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : '创建 schema-first 任务失败',
+    });
+  }
+});
+
+app.get('/api/tasks/:id/schema', async (req, res) => {
+  try {
+    const taskId = req.params.id;
+    if (!isMediaTaskId(taskId)) {
+      res.status(404).json({ success: false, error: '仅支持 UGC 任务的 schema' });
+      return;
+    }
+    const result = await getUgcTaskSchema(taskId);
+    res.json({ success: true, data: result });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error instanceof Error ? error.message : '读取任务 schema 失败' });
+  }
+});
+
+app.post('/api/tasks/:id/answers', async (req, res) => {
+  try {
+    const taskId = req.params.id;
+    const { answers } = req.body as { answers?: import('./src/types/ugc').UgcStructuredAnswer[] };
+
+    if (!isMediaTaskId(taskId)) {
+      res.status(404).json({ success: false, error: '仅支持 UGC 任务' });
+      return;
+    }
+    if (!Array.isArray(answers) || answers.length === 0) {
+      res.status(400).json({ success: false, error: 'answers 必须是非空数组' });
+      return;
+    }
+
+    const task = await submitUgcTaskAnswers(taskId, answers);
+    res.json({ success: true, data: task });
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : '提交结构化答案失败';
+    // 业务错误返回 400,系统错误返回 500
+    const status =
+      msg.includes('unknown stepId') ||
+      msg.includes('missing required') ||
+      msg.includes('schema not ready') ||
+      msg.includes('cannot accept answers') ||
+      msg.includes('not found')
+        ? 400
+        : 500;
+    console.error('submitUgcTaskAnswers failed:', error);
+    res.status(status).json({ success: false, error: msg });
   }
 });
 

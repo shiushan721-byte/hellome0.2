@@ -232,6 +232,7 @@ export function statusLabel(status: TaskStatus): string {
   const map: Record<TaskStatus, string> = {
     draft: '草稿',
     queued: '排队中',
+    awaiting_input: '等待参数',
     running: '进行中',
     waiting_confirmation: '等待确认',
     completed: '已完成',

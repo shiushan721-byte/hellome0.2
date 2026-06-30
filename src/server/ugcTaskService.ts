@@ -5,11 +5,13 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 import type { Task, TaskStep, TaskStatus, HermesLogEntry } from '../types/workbench';
 import type {
+  HermesDynamicSchema,
   TaskExecutionMode,
   TaskPauseReasonType,
   UgcRoutePlan,
   TaskResumeMode,
   TaskRecoveryState,
+  UgcStructuredAnswer,
   UgcSystemUnderstanding,
   UgcTaskArtifact,
   UgcTaskEvent,
@@ -62,6 +64,10 @@ type TaskAggregate = {
   skillVersionId?: string;
   skillChecksum?: string;
   executionGrantId?: string;
+  /// 🆕 v1.1: Hermes 返回的动态参数 schema
+  schemaPayload?: import('../types/ugc').HermesDynamicSchema;
+  /// 🆕 v1.1: 用户提交的结构化答案
+  structuredAnswers?: Record<string, import('../types/ugc').UgcStructuredAnswer>;
   events: UgcTaskEvent[];
   attempt: number;
   startedAt?: string;
@@ -557,6 +563,8 @@ function toFrontendTask(record: TaskAggregate): Task {
     steps: record.task.steps ?? buildSteps(record.task.status),
     artifacts: record.task.artifacts ?? [],
     completedAt: record.completedAt ?? record.task.completedAt,
+    schemaPayload: record.schemaPayload,
+    structuredAnswers: record.structuredAnswers,
   });
 }
 
@@ -725,6 +733,8 @@ async function persist(record: TaskAggregate): Promise<void> {
       skillId: record.skillId ?? null,
       skillVersionId: record.skillVersionId ?? null,
       executionGrantId: record.executionGrantId ?? null,
+      schemaPayload: (record.schemaPayload ?? null) as unknown as Prisma.InputJsonValue,
+      structuredAnswers: (record.structuredAnswers ?? null) as unknown as Prisma.InputJsonValue,
       userId: user.id,
       workspaceId: workspace.id,
     },
@@ -752,6 +762,8 @@ async function persist(record: TaskAggregate): Promise<void> {
       skillId: record.skillId ?? null,
       skillVersionId: record.skillVersionId ?? null,
       executionGrantId: record.executionGrantId ?? null,
+      schemaPayload: (record.schemaPayload ?? null) as unknown as Prisma.InputJsonValue,
+      structuredAnswers: (record.structuredAnswers ?? null) as unknown as Prisma.InputJsonValue,
       userId: user.id,
       workspaceId: workspace.id,
     },
@@ -993,6 +1005,10 @@ async function loadAllFromPrisma(): Promise<TaskAggregate[]> {
       skillVersionId: row.skillVersionId ?? undefined,
       skillChecksum: row.executions[0]?.skillChecksum ?? undefined,
       executionGrantId: row.executionGrantId ?? undefined,
+      /// 🆕 v1.1: 从 DB 反序列化 Hermes schema + 结构化答案
+      schemaPayload: (row.schemaPayload as import('../types/ugc').HermesDynamicSchema | null) ?? undefined,
+      structuredAnswers:
+        (row.structuredAnswers as Record<string, import('../types/ugc').UgcStructuredAnswer> | null) ?? undefined,
       events: row.events.map((event) => ({
         id: event.id,
         type: event.type,
@@ -1612,4 +1628,296 @@ export async function loadUgcTaskAggregate(id: string): Promise<TaskAggregate | 
 
 export async function persistUgcTaskAggregate(record: TaskAggregate): Promise<void> {
   await persist(record);
+}
+
+// =============================================================================
+// v1.1: Schema-first 流程
+// =============================================================================
+//
+// 区别于 createUgcTask(老路径,7 字段 sellingPoint 必填,立即进 executeUnderstandingPhase):
+//   - createUgcTaskWithSchema: 只创建 task + 落 status=awaiting_input + 异步取 Hermes schema
+//   - getUgcTaskSchema:        返回 UgcTaskSchemaResponse (ready=true 时含 schema)
+//   - submitUgcTaskAnswers:    收结构化答案,落库 + 触发 executeUnderstandingPhase
+
+/**
+ * 创建"等待参数"任务。第 1 阶段只建任务,异步调 Hermes 拿参数 schema。
+ *
+ * 设计目标:用户在画布看到 "Hermes 正在分析..." 期间,后端已经把 task 落库
+ * 且 schema 即将就绪。前端用 GET /api/tasks/:id/schema 轮询。
+ */
+export async function createUgcTaskWithSchema(payload: {
+  skillId: string;
+  projectId?: string;
+  userExternalId: string;
+  displayName?: string;
+  email?: string;
+  phone?: string;
+  workspaceName?: string;
+  /** 透传的原始用户上下文(如 projectName),让 Hermes 决策更准 */
+  rawContext?: Record<string, unknown>;
+}): Promise<Task> {
+  // 0. 复用老的 skill binding 逻辑(拿 skillVersionId/checksum/grant)
+  const skillBinding = await resolvePublishedSkillBinding(payload.skillId);
+
+  // 1. 用一个最小化的 UgcTaskInput 占位(老字段都填空)
+  //    真正的 sellingPoint 在 submitUgcTaskAnswers 后回填
+  const minimalInput: UgcTaskInput = {
+    skillId: payload.skillId,
+    sellingPoint: '',
+    platform: '抖音',
+    effectGoal: '更像真人种草',
+  };
+
+  const record = buildAggregate({
+    input: minimalInput,
+    userExternalId: payload.userExternalId,
+    displayName: payload.displayName,
+    email: payload.email,
+    phone: payload.phone,
+    workspaceName: payload.workspaceName,
+  });
+  record.skillId = skillBinding.skillId;
+  record.skillVersionId = skillBinding.skillVersionId;
+  record.skillChecksum = skillBinding.checksum;
+  record.input.skillId = payload.skillId;
+  record.task.routePlan = await resolveSkillRoutePlan(payload.skillId, minimalInput);
+  record.task.costEstimate = `${record.task.routePlan.label} · ${record.task.routePlan.providerHint}`;
+  record.executions[0] = {
+    ...record.executions[0],
+    recipe: `${skillBinding.skillSlug}@${skillBinding.versionLabel}`,
+    metadata: {
+      skillId: skillBinding.skillId,
+      skillVersionId: skillBinding.skillVersionId,
+      skillChecksum: skillBinding.checksum,
+      versionNumber: skillBinding.versionNumber,
+      skillModels: skillBinding.version.executionConfig.modelSelection ?? DEFAULT_SKILL_MODELS,
+      flow: 'schema-first-v2',
+    },
+  };
+  // 🆕 第 1 阶段关键:状态切到 awaiting_input (不进执行队列)
+  record.task.status = 'awaiting_input';
+  pushEvent(
+    record,
+    'schema_requested',
+    'info',
+    `已创建等待参数任务,正在请求 Hermes skill (${payload.skillId}) 返回参数 schema`,
+    { skillId: payload.skillId, rawContext: payload.rawContext ?? null },
+  );
+  await persist(record);
+
+  // 2. 签 grant(老逻辑)
+  const grant = await createExecutionGrant({
+    taskId: record.task.id,
+    skillId: skillBinding.skillId,
+    skillVersionId: skillBinding.skillVersionId,
+    tokenBudgetMax: record.task.estimatedTokenMax,
+  });
+  record.executionGrantId = grant.grantId;
+  record.executions[0] = {
+    ...record.executions[0],
+    metadata: {
+      ...(record.executions[0].metadata ?? {}),
+      executionGrantId: grant.grantId,
+    },
+  };
+  pushEvent(record, 'execution_grant_issued', 'info', '已为本次任务签发短期 execution grant', {
+    grantId: grant.grantId,
+    expiresAt: grant.expiresAt,
+  });
+  await persist(record);
+
+  // 3. 异步取 Hermes schema(不等结果,立刻返回 task 给前端)
+  void fetchAndStoreSchema(record.task.id, payload.skillId).catch(async (err) => {
+    // 失败时回写一条 error event,前端轮询时能看到
+    const failRecord = await loadUgcTaskAggregate(record.task.id);
+    if (failRecord) {
+      failRecord.events.push({
+        id: `${record.task.id}-event-schema-fail`,
+        type: 'schema_failed',
+        level: 'error',
+        message: `Hermes skill 返回 schema 失败:${err.message ?? String(err)}`,
+        createdAt: nowIso(),
+        metadata: { skillId: payload.skillId, error: String(err) },
+      });
+      await persist(failRecord);
+    }
+  });
+
+  return toFrontendTask(record);
+}
+
+/**
+ * 调 Hermes skill 拿 schema,落库 + 切到 ready 状态。
+ * 失败抛错,由 createUgcTaskWithSchema 的 catch 兜底。
+ */
+async function fetchAndStoreSchema(taskId: string, skillId: string): Promise<void> {
+  const record = await loadUgcTaskAggregate(taskId);
+  if (!record) throw new Error(`task ${taskId} not found`);
+
+  // 动态 import 避免循环依赖
+  const { fetchHermesSkillSchema } = await import('./hermesVideoSkillRunner.mjs');
+
+  pushEvent(record, 'schema_fetching', 'info', `正在向本地 Hermes skill ${skillId} 请求参数 schema...`);
+  await persist(record);
+
+  const schema: HermesDynamicSchema = await fetchHermesSkillSchema(skillId);
+
+  record.schemaPayload = schema;
+  // status 保持 awaiting_input(schema 已就绪),等用户填答案
+  pushEvent(
+    record,
+    'schema_ready',
+    'info',
+    `已收到 Hermes skill 返回的参数 schema,共 ${schema.steps.length} 个参数待用户填写`,
+    { schemaVersion: schema.schemaVersion, stepCount: schema.steps.length },
+  );
+  await persist(record);
+}
+
+/**
+ * 拉取 task 的 schema 状态。供前端轮询用。
+ * - ready=true:  schema 就绪,前端开始渲染表单
+ * - ready=false: 仍在等,前端继续 spinner(用 pendingHint 文案)
+ */
+export async function getUgcTaskSchema(taskId: string): Promise<{
+  ready: boolean;
+  schema?: HermesDynamicSchema;
+  pendingHint?: string;
+}> {
+  const record = await loadUgcTaskAggregate(taskId);
+  if (!record) {
+    return { ready: false, pendingHint: '任务不存在或正在初始化' };
+  }
+  if (record.schemaPayload) {
+    return { ready: true, schema: record.schemaPayload };
+  }
+  if (record.task.status === 'failed' || record.task.status === 'cancelled') {
+    return { ready: false, pendingHint: `任务已 ${record.task.status === 'failed' ? '失败' : '取消'}` };
+  }
+  // 取最近一条 hint(从 events 倒推)
+  const lastEvent = record.events[record.events.length - 1];
+  return {
+    ready: false,
+    pendingHint:
+      lastEvent?.type === 'schema_fetching'
+        ? '正在向 Hermes 请求参数 schema...'
+        : lastEvent?.type === 'schema_failed'
+          ? `上次请求失败:${lastEvent.message}`
+          : '初始化中...',
+  };
+}
+
+/**
+ * 收用户结构化答案。落库 + 触发老 executeUnderstandingPhase 进入执行。
+ *
+ * 关键校验:answer 的 stepId 必须存在于 schema.steps,否则返回 400。
+ * 这样防止前端传错字段或脏数据。
+ */
+export async function submitUgcTaskAnswers(
+  taskId: string,
+  answers: UgcStructuredAnswer[],
+): Promise<Task> {
+  const record = await loadUgcTaskAggregate(taskId);
+  if (!record) {
+    throw new Error(`task ${taskId} not found`);
+  }
+  if (!record.schemaPayload) {
+    throw new Error(`task ${taskId} schema not ready yet`);
+  }
+  if (record.task.status !== 'awaiting_input' && record.task.status !== 'queued') {
+    throw new Error(
+      `task ${taskId} is in status ${record.task.status}, cannot accept answers`,
+    );
+  }
+
+  // 校验 stepId 都在 schema 里
+  const schemaStepIds = new Set(record.schemaPayload.steps.map((s) => s.id));
+  for (const ans of answers) {
+    if (!schemaStepIds.has(ans.stepId)) {
+      throw new Error(`unknown stepId: ${ans.stepId}`);
+    }
+  }
+  // 校验必填项都答了
+  const answered = new Set(answers.map((a) => a.stepId));
+  for (const step of record.schemaPayload.steps) {
+    if (step.required && !answered.has(step.id)) {
+      throw new Error(`missing required answer for step: ${step.id}`);
+    }
+  }
+
+  // 落库
+  record.structuredAnswers = Object.fromEntries(answers.map((a) => [a.stepId, a]));
+  pushEvent(
+    record,
+    'answers_submitted',
+    'info',
+    `用户已提交 ${answers.length} 条结构化答案,准备进入执行阶段`,
+    { stepCount: answers.length },
+  );
+  await persist(record);
+
+  // 触发老执行(等价于把 answers "展开"为老 UgcTaskInput 后进 executeUnderstandingPhase)
+  void executeUnderstandingPhaseFromAnswers(record.task.id);
+
+  return toFrontendTask(record);
+}
+
+/**
+ * submitUgcTaskAnswers 之后的执行入口。
+ * 把结构化 answers 重新"展平"成老的 UgcTaskInput,走 executeUnderstandingPhase。
+ *
+ * 简化策略:
+ *   - productAsset / productImage / talentImage 字段统一映射到 input.productImageUrl
+ *   - 把所有 select/text/textarea 的 value 用 "；" 拼成 sellingPoint(老逻辑)
+ *   - platform / effectGoal 用 schema 里的 prefill 或默认值
+ */
+async function executeUnderstandingPhaseFromAnswers(taskId: string): Promise<void> {
+  const record = await loadUgcTaskAggregate(taskId);
+  if (!record || !record.schemaPayload || !record.structuredAnswers) return;
+
+  const answers = record.structuredAnswers;
+
+  // 把结构化答案展平成 UgcTaskInput
+  // 已知 stepId 优先 hardcode 映射,未知的兜底进 sellingPoint
+  const input = { ...record.input };
+
+  // 文件类 step
+  const productAsset = answers['productAsset'] ?? answers['sourceVideo'] ?? answers['referenceImages'];
+  if (productAsset?.fileUrl) {
+    input.productImageUrl = productAsset.fileUrl;
+    input.productImageName = productAsset.fileName;
+  } else if (productAsset?.value?.startsWith('http')) {
+    // upload 步骤如果 fileUrl 没填,降级到 value(用户直接传了 URL)
+    input.productImageUrl = productAsset.value;
+    if (productAsset.fileName) input.productImageName = productAsset.fileName;
+  }
+
+  // URL 类 step
+  if (answers['referenceUrl']?.value) {
+    input.referenceUrl = answers['referenceUrl'].value;
+  }
+
+  // 平台/effectGoal(从 prefill 或 step 答案里挑)
+  const platform = (answers['targetPlatforms']?.values?.[0]) ?? '抖音';
+  input.platform = platform;
+  // effectGoal 留老默认值(后续可由 schema.prefill 提供)
+
+  // sellingPoint = 所有文本类 step 的拼接(保留老逻辑,做后端兜底)
+  const textAnswers = Object.entries(answers)
+    .filter(([k]) =>
+      !['referenceUrl', 'productAsset', 'sourceVideo', 'referenceImages', 'talentImage'].includes(k),
+    )
+    .map(([, v]) => v.value)
+    .filter(Boolean)
+    .join('；');
+  if (textAnswers) input.sellingPoint = textAnswers;
+
+  record.input = input;
+  record.task.status = 'queued';
+  pushEvent(record, 'execution_resumed', 'info', '结构化答案已展平为执行参数,准备开始 Hermes 执行');
+  await persist(record);
+
+  // 调老逻辑(从 executeUnderstandingPhase 入口继续)
+  // 因为 executeUnderstandingPhase 是 module-internal 函数,我们用 taskId 重启 phase
+  void executeUnderstandingPhase(taskId);
 }

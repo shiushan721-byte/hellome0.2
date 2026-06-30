@@ -1,8 +1,10 @@
 import type { GeoResultData } from '../types';
 import type {
+  HermesDynamicSchema,
   TaskExecutionMode,
   TaskRecoveryState,
   UgcRoutePlan,
+  UgcStructuredAnswer,
   UgcSystemUnderstanding,
   UgcTaskArtifact,
   UgcTaskInput,
@@ -11,6 +13,7 @@ import type {
 export type TaskStatus =
   | 'draft'
   | 'queued'
+  | 'awaiting_input'
   | 'running'
   | 'waiting_confirmation'
   | 'completed'
@@ -81,6 +84,11 @@ export interface Task {
   taskScope?: TaskScope;
   projectId?: string;
   projectName?: string;
+  /// 🆕 v1.1: Hermes 返回的动态参数 schema (前端渲染用)
+  /// 只在 status='awaiting_input' / 'queued' 时返回
+  schemaPayload?: HermesDynamicSchema;
+  /// 🆕 v1.1: 用户提交的结构化答案 (按 stepId 索引)
+  structuredAnswers?: Record<string, UgcStructuredAnswer>;
 }
 
 export interface ProjectProfile {

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import type { AgentChatConfig, ChatMessage as IChatMessage, StepAnswer, WorkflowPhase } from '../../../types/agentChatConfig';
 import ChatMessage from './ChatMessage';
 import ChatInputCard from './ChatInputCard';
@@ -17,27 +17,8 @@ interface Props {
   editingStepId?: string | null;
 }
 
-const executionStatuses = [
-  '正在极速唤起 Hermes 视频引擎...',
-  '正在提取核心卖点与画风...',
-  '智能运镜与音乐踩点匹配中...',
-  '即将完成，正在输出样片...',
-];
-
 export default function ChatPanel({ config, messages, currentStepIndex, phase, onAnswer, onAction, onEditStep, onConfirmExecute, answers = {}, editingStepId }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [statusIndex, setStatusIndex] = useState(0);
-
-  useEffect(() => {
-    if (phase === 'executing') {
-      const interval = setInterval(() => {
-        setStatusIndex(prev => (prev + 1) % executionStatuses.length);
-      }, 3000);
-      return () => clearInterval(interval);
-    } else {
-      setStatusIndex(0);
-    }
-  }, [phase]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -182,23 +163,14 @@ export default function ChatPanel({ config, messages, currentStepIndex, phase, o
         )}
 
         {phase === 'executing' && (
-          <div className="flex flex-col gap-3 w-full animate-in fade-in duration-500 mt-4">
-            <div className="w-full h-1 bg-black/5 rounded-full overflow-hidden">
-              <div className="h-full bg-[#0F766E] rounded-full animate-[progress_10s_ease-in-out_infinite]" style={{ width: '60%' }} />
+          <div className="flex items-start gap-3 w-full justify-start animate-in fade-in duration-500">
+            <div className="flex shrink-0 h-8 w-8 items-center justify-center rounded-full bg-[#EAF6F4] text-[#0F766E] shadow-sm">
+              <span className="text-sm">{config.icon}</span>
             </div>
-            <div className="flex items-center gap-2 px-1">
+            <div className="rounded-[20px] px-4 py-3 shadow-sm bg-white border border-black/[0.05] flex items-center gap-2">
               <Loader2 className="h-4 w-4 animate-spin text-[#0F766E]" />
-              <span className="text-[13px] font-medium text-black/60 transition-opacity duration-300">
-                {executionStatuses[statusIndex]}
-              </span>
+              <span className="text-[14px] text-black/60">正在调用 Hermes 桌面端处理中...</span>
             </div>
-            <style>{`
-              @keyframes progress {
-                0% { width: 0%; opacity: 1; }
-                50% { width: 80%; opacity: 0.8; }
-                100% { width: 100%; opacity: 0.5; }
-              }
-            `}</style>
           </div>
         )}
 

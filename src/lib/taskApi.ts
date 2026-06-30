@@ -1,5 +1,5 @@
 import type { Task } from '../types/workbench';
-import type { UgcTaskEvent, UgcTaskInput } from '../types/ugc';
+import type { HermesDynamicSchema, UgcStructuredAnswer, UgcTaskEvent, UgcTaskInput, UgcTaskSchemaResponse } from '../types/ugc';
 import { getUser } from './auth';
 
 type JsonResponse<T> = {

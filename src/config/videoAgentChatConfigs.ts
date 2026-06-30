@@ -46,8 +46,8 @@ export const VIDEO_AGENT_CHAT_CONFIGS: AgentChatConfig[] = [
       },
       {
         id: 'messageFocus',
-        type: 'select',
-        question: '视频里，你最希望让观众记住的核心信息是？',
+        type: 'multi-select',
+        question: '视频里，你最希望让观众记住的哪些核心信息？（可多选）',
         options: ['真实使用感', '高颜值包装', '送礼体面', '轻松入门容易上手'],
         required: true,
       },
@@ -142,8 +142,8 @@ export const VIDEO_AGENT_CHAT_CONFIGS: AgentChatConfig[] = [
       },
       {
         id: 'ctaFocus',
-        type: 'select',
-        question: '最后更想推动用户完成什么动作 (CTA)？',
+        type: 'multi-select',
+        question: '最后想推动用户完成哪些动作 (CTA)？（可多选）',
         options: ['小黄车立即下单', '先领券再加购', '进直播间咨询', '加购收藏'],
         required: true,
       }

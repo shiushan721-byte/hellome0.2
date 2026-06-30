@@ -13,6 +13,7 @@ interface Props {
 
 export default function ChatInputCard({ step, onSubmit, disabled, completed, answer, onEdit }: Props) {
   const [textValue, setTextValue] = useState('');
+  const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleSubmitValue = (value: string, filePreviewUrl?: string, fileName?: string) => {
@@ -110,6 +111,43 @@ export default function ChatInputCard({ step, onSubmit, disabled, completed, ans
               {opt}
             </button>
           ))}
+        </div>
+      )}
+
+      {step.type === 'multi-select' && (
+        <div className="space-y-4">
+          <div className="flex flex-wrap gap-2">
+            {step.options.map((opt) => {
+              const isSelected = selectedOptions.includes(opt);
+              return (
+                <button
+                  key={opt}
+                  disabled={disabled}
+                  onClick={() => {
+                    setSelectedOptions(prev => 
+                      prev.includes(opt) ? prev.filter(o => o !== opt) : [...prev, opt]
+                    );
+                  }}
+                  className={`px-4 py-2.5 rounded-full border text-[13px] font-medium transition-colors disabled:opacity-50 ${
+                    isSelected 
+                      ? 'bg-[#EAF6F4] text-[#0F766E] border-[#0F766E]/30' 
+                      : 'bg-[#F7F7F8] text-black/70 border-transparent hover:border-[#0F766E]/20 hover:text-[#0F766E]'
+                  }`}
+                >
+                  {opt}
+                </button>
+              );
+            })}
+          </div>
+          <div className="flex justify-end">
+            <button
+              disabled={disabled || (step.required && selectedOptions.length === 0)}
+              onClick={() => handleSubmitValue(selectedOptions.length > 0 ? selectedOptions.join(', ') : '[未选择]')}
+              className="bg-black text-white px-6 py-2.5 rounded-xl text-[14px] font-medium disabled:opacity-30 transition-opacity flex items-center gap-2"
+            >
+              <Send className="h-4 w-4" /> 确认选择
+            </button>
+          </div>
         </div>
       )}
 

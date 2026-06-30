@@ -6,6 +6,7 @@ const statusConfig: Record<
 > = {
   draft: { label: '草稿', className: 'bg-black/5 text-black/45' },
   queued: { label: '排队中', className: 'bg-violet-50 text-violet-700' },
+  awaiting_input: { label: '等待参数', className: 'bg-cyan-50 text-cyan-700' },
   running: { label: '执行中', className: 'bg-blue-50 text-blue-700' },
   waiting_confirmation: { label: '等待确认', className: 'bg-amber-50 text-amber-700' },
   completed: { label: '已完成', className: 'bg-emerald-50 text-emerald-700' },
