@@ -134,3 +134,89 @@ export async function getHermesRuntime(): Promise<{
 }> {
   return requestJson('/api/runtime/hermes');
 }
+
+// =============================================================================
+// v1.1: Schema-first 流程的 4 个 API
+// =============================================================================
+//
+// createUgcTaskV2 + fetchRemoteTaskSchema + pollRemoteTaskSchema + submitUgcTaskAnswers
+// 对应后端 POST /api/tasks/ugc/v2 + GET /api/tasks/:id/schema + POST /api/tasks/:id/answers
+
+/**
+ * 第 1 阶段:创建"等待参数"任务。后端会异步调 Hermes 拿 schema。
+ *
+ * sellingPoint 留空(老 endpoint 必填,新 endpoint 不需要)。
+ * 返回的 task.status === 'awaiting_input'。
+ */
+export async function createUgcTaskV2(input: {
+  skillId: string;
+  rawContext?: Record<string, unknown>;
+}): Promise<Task> {
+  const user = getUser();
+  const externalId = user.email || user.phone || 'local-user';
+  return requestJson('/api/tasks/ugc/v2', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      skillId: input.skillId,
+      rawContext: input.rawContext,
+      user: {
+        externalId,
+        displayName: user.name,
+        email: user.email,
+        phone: user.phone,
+        workspaceName: user.workspace,
+      },
+    }),
+  });
+}
+
+/**
+ * 第 2 阶段:轮询一次。返回 ready=true 时 schema 已就绪。
+ */
+export async function fetchRemoteTaskSchema(taskId: string): Promise<UgcTaskSchemaResponse> {
+  return requestJson(`/api/tasks/${taskId}/schema`);
+}
+
+/**
+ * 第 2 阶段:持续轮询直到 ready=true 或 timeout。
+ *
+ * 默认 30 秒超时、500ms 间隔。
+ */
+export async function pollRemoteTaskSchema(
+  taskId: string,
+  options: { timeoutMs?: number; intervalMs?: number; onTick?: (hint?: string) => void } = {},
+): Promise<HermesDynamicSchema> {
+  const timeout = options.timeoutMs ?? 30_000;
+  const interval = options.intervalMs ?? 500;
+  const start = Date.now();
+
+  while (Date.now() - start < timeout) {
+    try {
+      const resp = await fetchRemoteTaskSchema(taskId);
+      if (resp.ready && resp.schema) {
+        return resp.schema;
+      }
+      options.onTick?.(resp.pendingHint);
+    } catch (err) {
+      // 404 = task 还没建好,继续轮询
+      options.onTick?.(String(err));
+    }
+    await new Promise((r) => setTimeout(r, interval));
+  }
+  throw new Error(`Schema polling timed out after ${timeout}ms for task ${taskId}`);
+}
+
+/**
+ * 第 3 阶段:提交结构化答案。后端校验 + 触发老执行流。
+ */
+export async function submitUgcTaskAnswers(
+  taskId: string,
+  answers: UgcStructuredAnswer[],
+): Promise<Task> {
+  return requestJson(`/api/tasks/${taskId}/answers`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ answers }),
+  });
+}

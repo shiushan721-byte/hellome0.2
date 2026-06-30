@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import type { AgentChatConfig, ChatMessage as IChatMessage, StepAnswer, WorkflowPhase } from '../../../types/agentChatConfig';
-import ChatMessage from './ChatMessage';
+
 import ChatInputCard from './ChatInputCard';
 import { Loader2, FolderOpen, Edit3, RefreshCcw } from 'lucide-react';
 
@@ -54,113 +54,36 @@ export default function ChatPanel({ config, messages, currentStepIndex, phase, o
         ref={scrollRef}
         className="flex-1 overflow-y-auto px-6 py-6 custom-scrollbar space-y-6"
       >
-        {messages.filter(msg => config.interactionMode === 'mode_a' || msg.role === 'agent').map((msg) => (
-          <ChatMessage 
-            key={msg.id} 
-            message={msg} 
-            agentIcon={config.icon} 
-            interactionMode={config.interactionMode}
-            onEdit={onEditStep}
-          />
-        ))}
+        {config.steps.map((step, idx) => {
+          // 我们只渲染已经回答过的，或者是当前正在回答的
+          const answer = answers[step.id];
+          const isEditing = editingStepId === step.id;
+          const isActive = idx === currentStepIndex && phase === 'chatting' && !editingStepId;
+          
+          // 如果这个 step 既没有答案，又不是当前活跃步，也不是编辑步，就不渲染
+          if (!answer && !isActive && !isEditing) return null;
 
-        {(config.interactionMode === 'mode_b' || config.interactionMode === 'mode_c') && (
-          config.steps.map((step, idx) => {
-            // 我们只渲染已经回答过的，或者是当前正在回答的
-            const answer = answers[step.id];
-            const isEditing = editingStepId === step.id;
-            const isActive = idx === currentStepIndex && phase === 'chatting' && !editingStepId;
-            
-            // 如果这个 step 既没有答案，又不是当前活跃步，也不是编辑步，就不渲染
-            if (!answer && !isActive && !isEditing) return null;
-
-            if (isEditing || isActive) {
-              return (
-                <ChatInputCard 
-                  key={step.id} 
-                  step={step} 
-                  onSubmit={onAnswer} 
-                />
-              );
-            }
-
+          if (isEditing || isActive) {
             return (
               <ChatInputCard 
                 key={step.id} 
                 step={step} 
                 onSubmit={onAnswer} 
-                completed={true} 
-                answer={answer} 
-                onEdit={() => onEditStep && onEditStep(step.id)} 
               />
             );
-          })
-        )}
+          }
 
-        {/* 对于 mode_a 保持原有逻辑：当前活跃的 step */}
-        {(config.interactionMode === 'mode_a' || !config.interactionMode) && phase === 'chatting' && currentStep && (
-          <ChatInputCard 
-            step={currentStep} 
-            onSubmit={onAnswer} 
-          />
-        )}
-
-        {phase === 'confirming' && (
-          <div className="flex flex-col gap-4 w-[90%] bg-white border border-[#E5E5E5] rounded-[20px] p-5 shadow-sm animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <h3 className="text-[15px] font-bold text-black flex items-center gap-2">
-              <span className="text-xl">📋</span> 
-              {(config.interactionMode === 'mode_a' || !config.interactionMode) ? '请最后核对以下参数' : '全部配置已就绪'}
-            </h3>
-            <div className="flex flex-col gap-3">
-              {(config.interactionMode === 'mode_a' || !config.interactionMode) && config.steps.map((step, idx) => {
-                const answer = answers[step.id];
-                if (!answer) return null;
-                return (
-                  <div key={step.id} className="flex flex-col gap-1 text-[13px]">
-                    <div className="flex items-center justify-between">
-                      <span className="text-black/50 font-medium">Step {idx + 1}: {step.question.split('\n')[0]}</span>
-                      {(config.interactionMode === 'mode_a' || config.interactionMode === 'mode_c') && onEditStep && (
-                        <button 
-                          onClick={() => onEditStep(step.id)}
-                          className="text-[#0F766E] hover:underline text-[12px] font-medium"
-                        >
-                          修改
-                        </button>
-                      )}
-                    </div>
-                    <div className="bg-[#F5F5F7] px-3 py-2 rounded-lg">
-                      {answer.filePreviewUrl ? (
-                        <div className="flex items-center gap-2">
-                          <div className="h-8 w-8 rounded-md bg-black/5 overflow-hidden shrink-0 flex items-center justify-center">
-                            {answer.filePreviewUrl.match(/\.(jpeg|jpg|gif|png|webp|svg)$/i) || answer.filePreviewUrl.startsWith('blob:') ? (
-                              <img src={answer.filePreviewUrl} alt="uploaded" className="h-full w-full object-cover" />
-                            ) : (
-                              <span className="text-[10px] text-black/40">文件</span>
-                            )}
-                          </div>
-                          <span className="text-black/80 font-medium truncate max-w-[150px]">
-                            {answer.fileName || '已上传文件'}
-                          </span>
-                        </div>
-                      ) : (
-                        <span className="text-black/80 font-medium">
-                          {answer.value || '(跳过)'}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            
-            <button
-              onClick={onConfirmExecute}
-              className="mt-2 w-full py-3 rounded-xl bg-[#0F766E] text-white text-[14px] font-bold shadow-sm hover:bg-[#0F766E]/90 transition-colors"
-            >
-              确认无误，开始生成视频
-            </button>
-          </div>
-        )}
+          return (
+            <ChatInputCard 
+              key={step.id} 
+              step={step} 
+              onSubmit={onAnswer} 
+              completed={true} 
+              answer={answer} 
+              onEdit={() => onEditStep && onEditStep(step.id)} 
+            />
+          );
+        })}
 
         {phase === 'executing' && (
           <div className="flex items-start gap-3 w-full justify-start animate-in fade-in duration-500">
@@ -174,12 +97,7 @@ export default function ChatPanel({ config, messages, currentStepIndex, phase, o
           </div>
         )}
 
-        {phase === 'chatting' && currentStep && (
-          <ChatInputCard 
-            step={currentStep} 
-            onSubmit={onAnswer} 
-          />
-        )}
+
 
         {phase === 'completed' && (
           <div className="flex flex-col gap-3 animate-in fade-in slide-in-from-bottom-4 duration-500">

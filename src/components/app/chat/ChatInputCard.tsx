@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
 import { UploadCloud, Link as LinkIcon, Send, Edit2, CheckCircle2 } from 'lucide-react';
 import type { ChatStep, StepAnswer } from '../../../types/agentChatConfig';
+import { normalizeOption } from '../../../types/agentChatConfig';
 
 interface Props {
   step: ChatStep;
@@ -14,14 +15,25 @@ interface Props {
 export default function ChatInputCard({ step, onSubmit, disabled, completed, answer, onEdit }: Props) {
   const [textValue, setTextValue] = useState('');
   const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
+  const [sliderValue, setSliderValue] = useState<number>(
+    step.type === 'slider' ? (step.defaultValue ?? step.min) : 0,
+  );
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleSubmitValue = (value: string, filePreviewUrl?: string, fileName?: string) => {
+  const handleSubmitValue = (
+    value: string,
+    filePreviewUrl?: string,
+    fileName?: string,
+    values?: string[],
+    numericValue?: number,
+  ) => {
     onSubmit({
       stepId: step.id,
       value,
       filePreviewUrl,
       fileName,
+      values,
+      numericValue,
     });
   };
 
@@ -50,7 +62,7 @@ export default function ChatInputCard({ step, onSubmit, disabled, completed, ans
                       const url = answer.filePreviewUrl;
                       const isImage = url.match(/\.(jpeg|jpg|gif|png|webp|svg)$/i) || (url.startsWith('blob:') && answer.fileName?.match(/\.(jpeg|jpg|gif|png|webp|svg)$/i));
                       const isVideo = url.match(/\.(mp4|mov|avi|wmv|flv|webm)$/i) || (url.startsWith('blob:') && answer.fileName?.match(/\.(mp4|mov|avi|wmv|flv|webm)$/i));
-                      
+
                       if (isImage) {
                         return <img src={url} alt="uploaded" className="h-full w-full object-cover" />;
                       } else if (isVideo) {
@@ -70,6 +82,21 @@ export default function ChatInputCard({ step, onSubmit, disabled, completed, ans
                     <span className="text-[11px] text-black/40">点击修改可重新上传</span>
                   </div>
                 </div>
+              ) : answer.values && answer.values.length > 0 ? (
+                // multi-select 答案展示
+                <div className="flex flex-wrap gap-1.5">
+                  {answer.values.map((v, i) => (
+                    <span key={i} className="px-2 py-0.5 bg-[#EAF6F4] text-[#0F766E] text-[12px] rounded-md">
+                      {v}
+                    </span>
+                  ))}
+                </div>
+              ) : answer.numericValue !== undefined ? (
+                // slider 答案展示
+                <p className="text-[15px] font-semibold text-[#1A1A1A]">
+                  {answer.numericValue}
+                  {step.type === 'slider' && step.unit ? ` ${step.unit}` : ''}
+                </p>
               ) : (
                 <p className="text-[15px] font-semibold text-[#1A1A1A]">
                   {answer.value || '(跳过)'}
@@ -101,40 +128,46 @@ export default function ChatInputCard({ step, onSubmit, disabled, completed, ans
 
       {step.type === 'select' && (
         <div className="flex flex-wrap gap-2">
-          {step.options.map((opt) => (
-            <button
-              key={opt}
-              disabled={disabled}
-              onClick={() => handleSubmitValue(opt)}
-              className="px-4 py-2.5 rounded-full bg-[#F7F7F8] hover:bg-[#EAF6F4] hover:text-[#0F766E] border border-transparent hover:border-[#0F766E]/20 text-[13px] font-medium text-black/70 transition-colors disabled:opacity-50"
-            >
-              {opt}
-            </button>
-          ))}
+          {step.options.map((opt, idx) => {
+            const { value, label, hint } = normalizeOption(opt);
+            return (
+              <button
+                key={`${value}-${idx}`}
+                disabled={disabled}
+                onClick={() => handleSubmitValue(value)}
+                title={hint}
+                className="px-4 py-2.5 rounded-full bg-[#F7F7F8] hover:bg-[#EAF6F4] hover:text-[#0F766E] border border-transparent hover:border-[#0F766E]/20 text-[13px] font-medium text-black/70 transition-colors disabled:opacity-50"
+              >
+                {label}
+              </button>
+            );
+          })}
         </div>
       )}
 
       {step.type === 'multi-select' && (
         <div className="space-y-4">
           <div className="flex flex-wrap gap-2">
-            {step.options.map((opt) => {
-              const isSelected = selectedOptions.includes(opt);
+            {step.options.map((opt, idx) => {
+              const { value, label, hint } = normalizeOption(opt);
+              const isSelected = selectedOptions.includes(value);
               return (
                 <button
-                  key={opt}
+                  key={`${value}-${idx}`}
                   disabled={disabled}
                   onClick={() => {
-                    setSelectedOptions(prev => 
-                      prev.includes(opt) ? prev.filter(o => o !== opt) : [...prev, opt]
+                    setSelectedOptions((prev) =>
+                      prev.includes(value) ? prev.filter((o) => o !== value) : [...prev, value],
                     );
                   }}
+                  title={hint}
                   className={`px-4 py-2.5 rounded-full border text-[13px] font-medium transition-colors disabled:opacity-50 ${
-                    isSelected 
-                      ? 'bg-[#EAF6F4] text-[#0F766E] border-[#0F766E]/30' 
+                    isSelected
+                      ? 'bg-[#EAF6F4] text-[#0F766E] border-[#0F766E]/30'
                       : 'bg-[#F7F7F8] text-black/70 border-transparent hover:border-[#0F766E]/20 hover:text-[#0F766E]'
                   }`}
                 >
-                  {opt}
+                  {label}
                 </button>
               );
             })}
@@ -142,7 +175,14 @@ export default function ChatInputCard({ step, onSubmit, disabled, completed, ans
           <div className="flex justify-end">
             <button
               disabled={disabled || (step.required && selectedOptions.length === 0)}
-              onClick={() => handleSubmitValue(selectedOptions.length > 0 ? selectedOptions.join(', ') : '[未选择]')}
+              onClick={() =>
+                handleSubmitValue(
+                  selectedOptions.length > 0 ? selectedOptions.join(', ') : '[未选择]',
+                  undefined,
+                  undefined,
+                  selectedOptions,
+                )
+              }
               className="bg-black text-white px-6 py-2.5 rounded-xl text-[14px] font-medium disabled:opacity-30 transition-opacity flex items-center gap-2"
             >
               <Send className="h-4 w-4" /> 确认选择
@@ -246,6 +286,73 @@ export default function ChatInputCard({ step, onSubmit, disabled, completed, ans
               className="bg-black text-white px-6 py-2.5 rounded-xl text-[14px] font-medium disabled:opacity-30 transition-opacity flex items-center gap-2"
             >
               <Send className="h-4 w-4" /> 发送
+            </button>
+          </div>
+        </div>
+      )}
+
+      {step.type === 'textarea' && (
+        <div className="space-y-3">
+          <textarea
+            disabled={disabled}
+            rows={step.rows || 4}
+            placeholder={step.placeholder}
+            maxLength={step.maxLength}
+            value={textValue}
+            onChange={(e) => setTextValue(e.target.value)}
+            className="w-full px-4 py-3 rounded-2xl bg-[#F7F7F8] border border-black/5 focus:border-black/20 focus:ring-0 text-[14px] outline-none transition-all disabled:opacity-50 resize-y min-h-[120px]"
+          />
+          <div className="flex justify-between items-center">
+            <span className="text-[12px] text-black/30">
+              {textValue.length} {step.maxLength ? `/ ${step.maxLength}` : ''}
+            </span>
+            <button
+              disabled={disabled || (step.required && !textValue.trim())}
+              onClick={() => handleSubmitValue(textValue || '[未填写]')}
+              className="bg-black text-white px-6 py-2.5 rounded-xl text-[14px] font-medium disabled:opacity-30 transition-opacity flex items-center gap-2"
+            >
+              <Send className="h-4 w-4" /> 发送
+            </button>
+          </div>
+        </div>
+      )}
+
+      {step.type === 'slider' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <span className="text-[12px] text-black/40">
+              范围 {step.min} - {step.max}
+            </span>
+            <span className="text-[24px] font-bold text-[#0F766E]">
+              {sliderValue}
+              {step.unit ? <span className="text-[14px] text-black/50 ml-1">{step.unit}</span> : null}
+            </span>
+          </div>
+          <input
+            type="range"
+            disabled={disabled}
+            min={step.min}
+            max={step.max}
+            step={step.step ?? 1}
+            value={sliderValue}
+            onChange={(e) => setSliderValue(Number(e.target.value))}
+            className="w-full h-2 bg-[#F5F5F7] rounded-full appearance-none cursor-pointer accent-[#0F766E]"
+          />
+          <div className="flex justify-end">
+            <button
+              disabled={disabled}
+              onClick={() =>
+                handleSubmitValue(
+                  String(sliderValue),
+                  undefined,
+                  undefined,
+                  undefined,
+                  sliderValue,
+                )
+              }
+              className="bg-black text-white px-6 py-2.5 rounded-xl text-[14px] font-medium disabled:opacity-30 transition-opacity flex items-center gap-2"
+            >
+              <Send className="h-4 w-4" /> 确认数值
             </button>
           </div>
         </div>

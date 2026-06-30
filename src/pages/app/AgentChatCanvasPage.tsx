@@ -4,9 +4,17 @@ import { getChatAgentConfig } from '../../config/testAgentConfig';
 import type { ChatMessage as IChatMessage, StepAnswer, WorkflowPhase } from '../../types/agentChatConfig';
 import ChatPanel from '../../components/app/chat/ChatPanel';
 import CanvasPanel from '../../components/app/canvas/CanvasPanel';
-import { createRemoteUgcTask, getRemoteTask } from '../../lib/taskApi';
-import type { UgcTaskInput, UgcTaskEvent, UgcTaskArtifact } from '../../types/ugc';
+import {
+  createRemoteUgcTask,
+  createUgcTaskV2,
+  getRemoteTask,
+  pollRemoteTaskSchema,
+  submitUgcTaskAnswers,
+} from '../../lib/taskApi';
+import type { HermesDynamicSchema, UgcStructuredAnswer, UgcTaskEvent, UgcTaskArtifact } from '../../types/ugc';
+import type { Task } from '../../types/workbench';
 import { consumePendingAgentContext, getActiveProjectId } from '../../lib/projectStore';
+import { mapHermesSchemaToChatConfig } from '../../lib/hermesSchemaAdapter';
 
 export interface TaskRun {
   taskId: string;
@@ -43,37 +51,131 @@ export default function AgentChatCanvasPage() {
   
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
 
+  // 🆕 v1.1: schema-first 流程的 spinner 文案
+  const [schemaPendingHint, setSchemaPendingHint] = useState<string>('正在初始化...');
+
+  // 🆕 v1.1: 标记是否走 schema-first 流程 (true 时后续提交走 /api/tasks/:id/answers)
+  const [useSchemaFirstFlow, setUseSchemaFirstFlow] = useState(false);
+
   // Canvas State (Real Events & Artifacts)
   const [runs, setRuns] = useState<TaskRun[]>([]);
 
   // Initialize & Consume Project Context
-  useEffect(() => {
-    // 处理 React Strict Mode 带来的双重触发，以及页面刷新时的状态丢失
-    const context = consumePendingAgentContext(agentId);
-    const resolvedProjectId = context?.projectId || getActiveProjectId();
-    
-    if (!resolvedProjectId) {
-      navigate('/app/agents', { replace: true });
-      return;
-    }
-    setProjectId(resolvedProjectId);
+    useEffect(() => {
+      // 处理 React Strict Mode 带来的双重触发，以及页面刷新时的状态丢失
+      const context = consumePendingAgentContext(agentId);
+      const resolvedProjectId = context?.projectId || getActiveProjectId();
 
-    if (dynamicConfig && phase === 'idle') {
-      setMessages([
-        {
-          id: 'welcome',
-          role: 'agent',
-          content: dynamicConfig.welcomeMessage,
-          timestamp: Date.now(),
-        }
+      // 🆕 v1.1: projectId 改为可选 — 没选项目也允许进入(只影响展示归属,不影响执行)
+      setProjectId(resolvedProjectId || null);
+
+      if (phase !== 'idle') return;
+
+      // 🆕 v1.1: 检测是否走 schema-first 流程
+      // 条件: skillId 是 9 个 video skill 之一 (媒体场景)
+      const VIDEO_SKILL_IDS = new Set([
+        'media-seeding', 'media-review', 'media-conversion', 'media-showcase',
+        'media-demo', 'media-proposal', 'media-longform-cut', 'media-animation',
+        'media-localization',
       ]);
-      setPhase('chatting');
-    }
-  }, [dynamicConfig, phase, agentId, navigate]);
+      const shouldUseSchemaFirst = VIDEO_SKILL_IDS.has(agentId);
 
-  if (!dynamicConfig) {
-    return <Navigate to="/app/agents" replace />;
-  }
+      if (shouldUseSchemaFirst) {
+        // v1.1 schema-first 流程:立即发请求拿 schema,不要先 welcome
+        void startSchemaFirstFlow(agentId);
+        return;
+      }
+
+      // 老流程:有 dynamicConfig 就直接进入 chatting
+      if (dynamicConfig) {
+        setMessages([
+          {
+            id: 'welcome',
+            role: 'agent',
+            content: dynamicConfig.welcomeMessage,
+            timestamp: Date.now(),
+          },
+        ]);
+        setPhase('chatting');
+      }
+    }, [dynamicConfig, phase, agentId, navigate]);
+
+    /**
+     * 🆕 v1.1: schema-first 流程入口
+     *
+     * 步骤:
+     *   1. POST /api/tasks/ugc/v2 创建 awaiting_input 任务
+     *   2. 轮询 GET /api/tasks/:id/schema 直到 ready=true
+     *   3. mapHermesSchemaToChatConfig 把 schema 转成 AgentChatConfig
+     *   4. setDynamicConfig + setMessages welcome + setPhase('chatting')
+     *   5. 任何步骤失败:fallback 到老 dynamicConfig (前端兜底,不卡死用户)
+     */
+    const startSchemaFirstFlow = async (skillId: string) => {
+      setPhase('awaitingSchema');
+      setSchemaPendingHint('正在向 Hermes 发送请求...');
+      setUseSchemaFirstFlow(true);
+
+      try {
+        // 1. 创建任务
+        const draftTask = await createUgcTaskV2({ skillId });
+        setActiveTaskId(draftTask.id);
+        setSchemaPendingHint('正在等待 Hermes skill 返回参数 schema...');
+
+        // 2. 轮询 schema
+        const schema: HermesDynamicSchema = await pollRemoteTaskSchema(draftTask.id, {
+          timeoutMs: 30_000,
+          intervalMs: 500,
+          onTick: (hint) => setSchemaPendingHint(hint ?? '正在等待 Hermes...'),
+        });
+
+        // 3. 映射成前端 config
+        const newConfig = mapHermesSchemaToChatConfig(schema, draftTask.id);
+        setDynamicConfig(newConfig);
+
+        // 4. 切到 chatting
+        setMessages([
+          {
+            id: 'welcome',
+            role: 'agent',
+            content: newConfig.welcomeMessage,
+            timestamp: Date.now(),
+          },
+        ]);
+        setPhase('chatting');
+      } catch (err) {
+        console.error('[agentChatCanvas] schema-first flow failed, fallback to static config', err);
+        // Fallback: 用前端 videoAgentChatConfigs 里的老 config,不卡死用户
+        const fallbackConfig = getChatAgentConfig(skillId);
+        if (fallbackConfig) {
+          setDynamicConfig(fallbackConfig);
+          setMessages([
+            {
+              id: 'welcome',
+              role: 'agent',
+              content: fallbackConfig.welcomeMessage + '\n\n(注:Hermes 暂时不可用,使用本地 fallback 配置)',
+              timestamp: Date.now(),
+            },
+          ]);
+          setPhase('chatting');
+          setUseSchemaFirstFlow(false); // 走老 endpoint
+        } else {
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: `err-${Date.now()}`,
+              role: 'agent',
+              content: `Hermes 暂时不可用,且没有本地 fallback 配置:${err instanceof Error ? err.message : String(err)}`,
+              timestamp: Date.now(),
+            },
+          ]);
+          setPhase('chatting');
+        }
+      }
+    };
+
+    if (!dynamicConfig) {
+      return <Navigate to="/app/agents" replace />;
+    }
 
   const handleAnswer = async (answer: StepAnswer) => {
     const step = dynamicConfig.steps[currentStepIndex];
@@ -96,13 +198,8 @@ export default function AgentChatCanvasPage() {
       // After non-destructive edit, check if all steps are done
       const allComplete = dynamicConfig.steps.every(s => newAnswers[s.id]);
       if (allComplete) {
-        const mode = dynamicConfig.interactionMode || 'mode_a';
-        if (mode === 'mode_b') {
-          setPhase('executing');
-          await startHermesExecution(newAnswers);
-        } else {
-          setPhase('confirming');
-        }
+        setPhase('executing');
+        await startHermesExecution(newAnswers);
       } else {
         // Find first unanswered step
         const firstUnansweredIndex = dynamicConfig.steps.findIndex(s => !newAnswers[s.id]);
@@ -134,48 +231,16 @@ export default function AgentChatCanvasPage() {
       setCurrentStepIndex(nextIndex);
     } else {
       // All steps completed
-      const mode = dynamicConfig.interactionMode || 'mode_a';
-      if (mode === 'mode_b') {
-        // Mode B: auto execute
-        setPhase('executing');
-        await startHermesExecution(newAnswers);
-      } else {
-        // Mode A/C: wait for confirmation
-        setPhase('confirming');
-      }
+      // All steps completed, auto execute (formerly mode_b)
+      setPhase('executing');
+      await startHermesExecution(newAnswers);
     }
   };
 
   const handleEditStep = (stepId: string) => {
-    const mode = dynamicConfig.interactionMode || 'mode_a';
-    
-    if (mode === 'mode_a') {
-      // 方案A：破坏性回退（清除后面的所有答案和气泡）
-      const stepIndex = dynamicConfig.steps.findIndex(s => s.id === stepId);
-      if (stepIndex === -1) return;
-      
-      setCurrentStepIndex(stepIndex);
-      setPhase('chatting');
-      
-      const stepsToRemove = dynamicConfig.steps.slice(stepIndex).map(s => s.id);
-      setAnswers(prev => {
-        const next = { ...prev };
-        stepsToRemove.forEach(id => delete next[id]);
-        return next;
-      });
-      
-      setMessages(prev => {
-        const idx = prev.findIndex(m => m.stepId && stepsToRemove.includes(m.stepId));
-        if (idx !== -1) {
-          return prev.slice(0, idx);
-        }
-        return prev;
-      });
-    } else {
-      // 方案B/C：非破坏性回退（直接原地激活该卡片，保留后续答案）
-      setEditingStepId(stepId);
-      setPhase('chatting');
-    }
+    // 非破坏性回退（直接原地激活该卡片，保留后续答案）
+    setEditingStepId(stepId);
+    setPhase('chatting');
   };
 
   const handleConfirmExecute = async () => {
@@ -184,6 +249,48 @@ export default function AgentChatCanvasPage() {
   };
 
   const startHermesExecution = async (finalAnswers: Record<string, StepAnswer>) => {
+    // 🆕 v1.1: schema-first 流程 — 调 /api/tasks/:id/answers + 轮询真实 task
+    if (useSchemaFirstFlow && dynamicConfig.hermesTaskId) {
+      try {
+        setPhase('executing');
+        // 转换 StepAnswer[] → UgcStructuredAnswer[]
+        const structuredAnswers: UgcStructuredAnswer[] = Object.values(finalAnswers).map((a) => ({
+          stepId: a.stepId,
+          value: a.value,
+          values: a.values,
+          fileUrl: a.filePreviewUrl,
+          fileName: a.fileName,
+        }));
+
+        await submitUgcTaskAnswers(dynamicConfig.hermesTaskId, structuredAnswers);
+
+        // 添加到 runs 让 CanvasPanel 渲染
+        const realTaskId = dynamicConfig.hermesTaskId;
+        setActiveTaskId(realTaskId);
+        setRuns((prev) => [
+          ...prev,
+          { taskId: realTaskId, events: [], artifacts: [], status: 'running' },
+        ]);
+
+        // 切换到老轮询逻辑 (见下方 useEffect)
+        return;
+      } catch (err) {
+        console.error('[agentChatCanvas] submit answers failed', err);
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `err-${Date.now()}`,
+            role: 'agent',
+            content: `提交答案失败:${err instanceof Error ? err.message : String(err)}`,
+            timestamp: Date.now(),
+          },
+        ]);
+        setPhase('chatting');
+        return;
+      }
+    }
+
+    // 老流程:走前端 mock 演示 (保留作为 fallback / demo 模式)
     const mockTaskId = `mock-${Date.now()}`;
     setActiveTaskId(mockTaskId);
     setRuns(prev => [...prev, { taskId: mockTaskId, events: [], artifacts: [], status: 'running' }]);
@@ -267,21 +374,14 @@ export default function AgentChatCanvasPage() {
       alert('已触发指令：打开本地文件夹 (Hermes Client Integration)');
     } else if (action === 'edit_request') {
       // 本期不走“增加自定义输入文字框”的逻辑
-      // 根据交互模式，回退到适合修改的界面
-      const mode = dynamicConfig.interactionMode || 'mode_a';
-      if (mode === 'mode_b') {
-        // 模式 B 纯卡片，直接切回 chatting 状态，并给出系统提示引导
-        setPhase('chatting');
-        setMessages(prev => [...prev, {
-          id: `edit-prompt-${Date.now()}`,
-          role: 'agent',
-          content: '请点击上方需要调整的配置卡片右上角的「修改」按钮进行调整哦～',
-          timestamp: Date.now(),
-        }]);
-      } else {
-        // 模式 A 和 C 都有确认大卡片，回退到 confirming 状态让用户统一重新核对
-        setPhase('confirming');
-      }
+      // 模式 B 纯卡片，直接切回 chatting 状态，并给出系统提示引导
+      setPhase('chatting');
+      setMessages(prev => [...prev, {
+        id: `edit-prompt-${Date.now()}`,
+        role: 'agent',
+        content: '请点击上方需要调整的配置卡片右上角的「修改」按钮进行调整哦～',
+        timestamp: Date.now(),
+      }]);
     } else if (action === 'restart') {
       setPhase('idle');
       setAnswers({});
