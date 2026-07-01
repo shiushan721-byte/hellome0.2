@@ -1,4 +1,4 @@
-import { useMemo, useState, useSyncExternalStore, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, useSyncExternalStore, type FormEvent, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowRight, Shield, X } from 'lucide-react';
 import {
@@ -7,7 +7,7 @@ import {
   type DetectionDepth,
   type GeoTaskInput,
 } from '../../../types/workbench';
-import { createGeoTask } from '../../../lib/taskStore';
+import { createGeoTask, getGlobalActiveTask } from '../../../lib/taskStore';
 import { canAffordTask, getUsage } from '../../../lib/usageStore';
 import { runGeoTask } from '../../../lib/geoTaskRunner';
 import { estimateGeoTokens, formatToken, formatTokenRange } from '../../../lib/tokenBilling';
@@ -19,6 +19,11 @@ import {
   subscribeProjects,
 } from '../../../lib/projectStore';
 import type { ProjectProfile } from '../../../types/workbench';
+import {
+  attachWorkbenchTabTask,
+  getActiveWorkbenchTaskTab,
+  markWorkbenchTabDraft,
+} from '../../../lib/workbenchTabs';
 
 interface GeoTaskFormModalProps {
   open: boolean;
@@ -97,7 +102,22 @@ export default function GeoTaskFormModal({
       return;
     }
 
+    const activeTask = getGlobalActiveTask();
+    const activeTab = getActiveWorkbenchTaskTab();
+    if (activeTask || activeTab) {
+      const ok = window.confirm('当前已有任务正在执行。继续提交后，本任务会进入排队，等前一个任务结束后自动开始。');
+      if (!ok) return;
+    }
+
     const task = createGeoTask(draftInput, { projectId: selectedProjectId });
+    attachWorkbenchTabTask({
+      agentId: 'geo',
+      agentName: 'GEO 智能体',
+      projectId: selectedProject.id,
+      projectName: selectedProject.name,
+      taskId: task.id,
+      status: task.status,
+    });
     runGeoTask(task.id);
     onClose();
     navigate(`/app/tasks/${task.id}`);
@@ -114,6 +134,18 @@ export default function GeoTaskFormModal({
   };
 
   const selectedProject = getProject(selectedProjectId);
+
+  useEffect(() => {
+    if (!open || !selectedProject) return;
+    if (!brandName.trim() && !websiteUrl.trim() && !keywords.trim() && !competitors.trim()) return;
+    markWorkbenchTabDraft({
+      agentId: 'geo',
+      agentName: 'GEO 智能体',
+      projectId: selectedProject.id,
+      projectName: selectedProject.name,
+      draftInput,
+    });
+  }, [brandName, competitors, draftInput, keywords, open, selectedProject, websiteUrl]);
 
   if (!open) return null;
 

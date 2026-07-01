@@ -123,9 +123,9 @@ export default function AgentsPage({ variant = 'app' }: AgentsPageProps) {
     }
   };
 
-  const openAgentAfterProjectChoice = (agentId: string) => {
+  const openAgentAfterProjectChoice = (agentId: string, projectId: string, tabId: string) => {
     setProjectChoiceAgent(null);
-    navigate(getAgentWorkspacePath(agentId));
+    navigate(`${getAgentWorkspacePath(agentId)}?project=${encodeURIComponent(projectId)}&tab=${encodeURIComponent(tabId)}&launch=${Date.now()}`);
   };
 
   const filteredMarket = useMemo(() => {

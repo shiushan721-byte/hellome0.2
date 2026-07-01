@@ -13,8 +13,16 @@ import {
 } from '../../lib/taskApi';
 import type { HermesDynamicSchema, UgcStructuredAnswer, UgcTaskEvent, UgcTaskArtifact } from '../../types/ugc';
 import type { Task } from '../../types/workbench';
-import { consumePendingAgentContext, getActiveProjectId } from '../../lib/projectStore';
+import { consumePendingAgentContext, getActiveProjectId, getProject } from '../../lib/projectStore';
 import { mapHermesSchemaToChatConfig } from '../../lib/hermesSchemaAdapter';
+import { getAgentById } from '../../data/agentsCatalog';
+import {
+  attachWorkbenchTabTask,
+  getActiveWorkbenchTaskTab,
+  getWorkbenchTabForProjectAgent,
+  markWorkbenchTabDraft,
+} from '../../lib/workbenchTabs';
+import { getGlobalActiveTask } from '../../lib/taskStore';
 
 export interface TaskRun {
   taskId: string;
@@ -35,8 +43,11 @@ export default function AgentChatCanvasPage() {
   
   const routeAgentId = resolveUgcAgentId(location.pathname);
   const agentId = searchParams.get('id') || routeAgentId;
-  
+  const launchKey = searchParams.get('launch') ?? '';
+  const routeTabId = searchParams.get('tab') ?? '';
   const baseConfig = getChatAgentConfig(agentId);
+  const agent = getAgentById(agentId);
+  const agentName = agent?.name ?? baseConfig?.title ?? '智能体';
 
   // Dynamic config to allow modifying step questions on the fly
   const [dynamicConfig, setDynamicConfig] = useState(baseConfig);
@@ -48,6 +59,7 @@ export default function AgentChatCanvasPage() {
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [editingStepId, setEditingStepId] = useState<string | null>(null);
   const [answers, setAnswers] = useState<Record<string, StepAnswer>>({});
+  const [hasUserEdited, setHasUserEdited] = useState(false);
   
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
 
@@ -61,44 +73,52 @@ export default function AgentChatCanvasPage() {
   const [runs, setRuns] = useState<TaskRun[]>([]);
 
   // Initialize & Consume Project Context
-    useEffect(() => {
-      // 处理 React Strict Mode 带来的双重触发，以及页面刷新时的状态丢失
-      const context = consumePendingAgentContext(agentId);
-      const resolvedProjectId = context?.projectId || getActiveProjectId();
+  useEffect(() => {
+    const context = consumePendingAgentContext(agentId);
+    const resolvedProjectId = context?.projectId || searchParams.get('project') || getActiveProjectId();
+    setProjectId(resolvedProjectId || null);
+    setDynamicConfig(baseConfig);
+    setAnswers({});
+    setMessages([]);
+    setCurrentStepIndex(0);
+    setEditingStepId(null);
+    setActiveTaskId(null);
+    setRuns([]);
+    setUseSchemaFirstFlow(false);
+    setHasUserEdited(false);
 
-      // 🆕 v1.1: projectId 改为可选 — 没选项目也允许进入(只影响展示归属,不影响执行)
-      setProjectId(resolvedProjectId || null);
+    if (!baseConfig) return;
 
-      if (phase !== 'idle') return;
+    const tabDraft =
+      !launchKey && resolvedProjectId && !routeTabId
+        ? (getWorkbenchTabForProjectAgent(resolvedProjectId, agentId)?.draftInput as
+            | Partial<{
+                answers: Record<string, StepAnswer>;
+                messages: IChatMessage[];
+                currentStepIndex: number;
+              }>
+            | undefined)
+        : undefined;
 
-      // 🆕 v1.1: 检测是否走 schema-first 流程
-      // 条件: skillId 是 9 个 video skill 之一 (媒体场景)
-      const VIDEO_SKILL_IDS = new Set([
-        'media-seeding', 'media-review', 'media-conversion', 'media-showcase',
-        'media-demo', 'media-proposal', 'media-longform-cut', 'media-animation',
-        'media-localization',
-      ]);
-      const shouldUseSchemaFirst = VIDEO_SKILL_IDS.has(agentId);
+    if (tabDraft?.answers) {
+      setAnswers(tabDraft.answers);
+      setMessages(tabDraft.messages ?? []);
+      setCurrentStepIndex(tabDraft.currentStepIndex ?? 0);
+      setPhase('chatting');
+      setHasUserEdited(true);
+      return;
+    }
 
-      if (shouldUseSchemaFirst) {
-        // v1.1 schema-first 流程:立即发请求拿 schema,不要先 welcome
-        void startSchemaFirstFlow(agentId);
-        return;
-      }
-
-      // 老流程:有 dynamicConfig 就直接进入 chatting
-      if (dynamicConfig) {
-        setMessages([
-          {
-            id: 'welcome',
-            role: 'agent',
-            content: dynamicConfig.welcomeMessage,
-            timestamp: Date.now(),
-          },
-        ]);
-        setPhase('chatting');
-      }
-    }, [dynamicConfig, phase, agentId, navigate]);
+    setMessages([
+      {
+        id: `welcome-${Date.now()}`,
+        role: 'agent',
+        content: baseConfig.welcomeMessage,
+        timestamp: Date.now(),
+      },
+    ]);
+    setPhase('chatting');
+  }, [agentId, baseConfig, launchKey, location.search]);
 
     /**
      * 🆕 v1.1: schema-first 流程入口
@@ -190,8 +210,27 @@ export default function AgentChatCanvasPage() {
     };
     
     const newAnswers = { ...answers, [answer.stepId]: answer };
+    setHasUserEdited(true);
     setAnswers(newAnswers);
-    setMessages(prev => [...prev, userMsg]);
+    setMessages((prev) => {
+      const nextMessages = [...prev, userMsg];
+      const project = projectId ? getProject(projectId) : null;
+      if (project) {
+        markWorkbenchTabDraft({
+          agentId,
+          agentName,
+          projectId: project.id,
+          tabId: routeTabId || undefined,
+          projectName: project.name,
+          draftInput: {
+            answers: newAnswers,
+            messages: nextMessages,
+            currentStepIndex,
+          },
+        });
+      }
+      return nextMessages;
+    });
     
     if (editingStepId) {
       setEditingStepId(null);
@@ -249,6 +288,31 @@ export default function AgentChatCanvasPage() {
   };
 
   const startHermesExecution = async (finalAnswers: Record<string, StepAnswer>) => {
+    const project = projectId ? getProject(projectId) : null;
+    if (!project) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `project-required-${Date.now()}`,
+          role: 'agent',
+          content: '使用智能体前需要先选择项目，请从首页或智能体市场点击“使用智能体”重新进入。',
+          timestamp: Date.now(),
+        },
+      ]);
+      setPhase('chatting');
+      return;
+    }
+
+    const activeTask = getGlobalActiveTask();
+    const activeTab = getActiveWorkbenchTaskTab(routeTabId || undefined);
+    if (activeTask || activeTab) {
+      const ok = window.confirm('当前已有任务正在执行。继续提交后，本任务会进入排队，等前一个任务结束后自动开始。');
+      if (!ok) {
+        setPhase('chatting');
+        return;
+      }
+    }
+
     // 🆕 v1.1: schema-first 流程 — 调 /api/tasks/:id/answers + 轮询真实 task
     if (useSchemaFirstFlow && dynamicConfig.hermesTaskId) {
       try {
@@ -267,6 +331,15 @@ export default function AgentChatCanvasPage() {
         // 添加到 runs 让 CanvasPanel 渲染
         const realTaskId = dynamicConfig.hermesTaskId;
         setActiveTaskId(realTaskId);
+        attachWorkbenchTabTask({
+          agentId,
+          agentName,
+          projectId: project.id,
+          tabId: routeTabId || undefined,
+          projectName: project.name,
+          taskId: realTaskId,
+          status: 'running',
+        });
         setRuns((prev) => [
           ...prev,
           { taskId: realTaskId, events: [], artifacts: [], status: 'running' },
@@ -293,6 +366,15 @@ export default function AgentChatCanvasPage() {
     // 老流程:走前端 mock 演示 (保留作为 fallback / demo 模式)
     const mockTaskId = `mock-${Date.now()}`;
     setActiveTaskId(mockTaskId);
+    attachWorkbenchTabTask({
+      agentId,
+      agentName,
+      projectId: project.id,
+      tabId: routeTabId || undefined,
+      projectName: project.name,
+      taskId: mockTaskId,
+      status: 'running',
+    });
     setRuns(prev => [...prev, { taskId: mockTaskId, events: [], artifacts: [], status: 'running' }]);
 
     let currentEvents: UgcTaskEvent[] = [];
@@ -351,6 +433,15 @@ export default function AgentChatCanvasPage() {
       url: 'https://vjs.zencdn.net/v/oceans.mp4' // Mock public video for demo
     }];
     updateRun('completed');
+    attachWorkbenchTabTask({
+      agentId,
+      agentName,
+      projectId: project.id,
+      tabId: routeTabId || undefined,
+      projectName: project.name,
+      taskId: mockTaskId,
+      status: 'completed',
+    });
     
     setPhase('completed');
     setMessages(prev => [...prev, {

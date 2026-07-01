@@ -1,5 +1,5 @@
 import { AlertTriangle, Download, ExternalLink, X } from 'lucide-react';
-import type { HermesConnectionStatus } from '../../lib/hermesConnection';
+import { pairHermesWithCurrentAccount, type HermesConnectionStatus } from '../../lib/hermesConnection';
 import { HERMES_DOWNLOAD_URL } from '../../lib/firstRunOnboarding';
 import { createPortal } from 'react-dom';
 
@@ -86,7 +86,7 @@ export default function HermesActionModal({
             <button
               type="button"
               onClick={() => {
-                onOpenHermes();
+                pairHermesWithCurrentAccount();
                 onPairedComplete?.();
               }}
               className="flex-1 min-w-0 h-11 px-3 rounded-lg border border-black/12 bg-white text-sm font-medium hover:bg-black/[0.02] whitespace-nowrap"

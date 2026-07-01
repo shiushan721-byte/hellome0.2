@@ -229,6 +229,7 @@ export type PendingAgentContext = {
   taskScope: 'project';
   projectId: string;
   projectName: string;
+  tabId?: string;
   createdAt: string;
 };
 

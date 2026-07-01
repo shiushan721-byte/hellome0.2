@@ -7,12 +7,13 @@ import {
   setPendingAgentContext,
   subscribeProjects,
 } from '../../../lib/projectStore';
+import { openWorkbenchTab } from '../../../lib/workbenchTabs';
 import type { AgentMarketCard } from '../../../types/agentsPage';
 
 interface AgentProjectChoiceModalProps {
   agent: Pick<AgentMarketCard, 'id' | 'name' | 'description'>;
   onClose: () => void;
-  onConfirm: (agentId: string) => void;
+  onConfirm: (agentId: string, projectId: string, tabId: string) => void;
 }
 
 export default function AgentProjectChoiceModal({
@@ -29,22 +30,29 @@ export default function AgentProjectChoiceModal({
     () => projects.find((project) => project.id === selectedProjectId) ?? null,
     [projects, selectedProjectId],
   );
-
   const confirmProject = () => {
     let project = selectedProject;
     if (creating) {
       project = createProject({ name: projectName.trim() || `${agent.name} 项目` });
     }
     if (!project) return;
+    const tab = openWorkbenchTab({
+      agentId: agent.id,
+      agentName: agent.name,
+      projectId: project.id,
+      projectName: project.name,
+      status: 'opened',
+    });
     setActiveProjectId(project.id);
     setPendingAgentContext({
       agentId: agent.id,
       taskScope: 'project',
       projectId: project.id,
       projectName: project.name,
+      tabId: tab.id,
       createdAt: new Date().toISOString(),
     });
-    onConfirm(agent.id);
+    onConfirm(agent.id, project.id, tab.id);
   };
 
   return (
@@ -126,6 +134,7 @@ export default function AgentProjectChoiceModal({
               使用项目进入
             </button>
           </div>
+
         </div>
       </section>
     </div>
