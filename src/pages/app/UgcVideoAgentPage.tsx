@@ -41,6 +41,7 @@ import { getGlobalActiveTask } from '../../lib/taskStore';
 import {
   attachWorkbenchTabTask,
   getActiveWorkbenchTaskTab,
+  getWorkbenchTab,
   getWorkbenchTabForProjectAgent,
   markWorkbenchTabDraft,
 } from '../../lib/workbenchTabs';
@@ -180,6 +181,8 @@ const BUSINESS_BLUEPRINTS: Record<string, BusinessBlueprint> = {
 export default function UgcVideoAgentPage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const searchParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
+  const routeTabId = searchParams.get('tab') ?? '';
   const entry = (location.state as AgentEntryState | null) ?? {};
   const routeAgentId = resolveUgcAgentId(location.pathname);
   const currentAgentId = entry.agentId ?? routeAgentId;
@@ -255,7 +258,9 @@ export default function UgcVideoAgentPage() {
     const context = consumePendingAgentContext(currentAgentId);
     if (context?.taskScope === 'project') {
       setSelectedProjectId(context.projectId);
-      const tabDraft = getWorkbenchTabForProjectAgent(context.projectId, currentAgentId)?.draftInput as
+      const tabDraft = (routeTabId
+        ? getWorkbenchTab(routeTabId)?.draftInput
+        : getWorkbenchTabForProjectAgent(context.projectId, currentAgentId)?.draftInput) as
         | Partial<{
             referenceUrl: string;
             productAsset: UploadedAsset | null;
@@ -280,7 +285,7 @@ export default function UgcVideoAgentPage() {
       }
     }
     setContextReady(true);
-  }, [agentName, contextReady, currentAgentId]);
+  }, [agentName, contextReady, currentAgentId, routeTabId]);
 
   const autoBusinessDescription = useMemo(
     () => buildBusinessDescription(title, businessBlueprint, selectedOptions),
@@ -332,6 +337,7 @@ export default function UgcVideoAgentPage() {
       agentId: currentAgentId,
       agentName,
       projectId: selectedProject.id,
+      tabId: routeTabId || undefined,
       projectName: selectedProject.name,
       draftInput: {
         referenceUrl,
@@ -374,6 +380,7 @@ export default function UgcVideoAgentPage() {
               agentId: currentAgentId,
               agentName,
               projectId: selectedProject.id,
+              tabId: routeTabId || undefined,
               projectName: selectedProject.name,
               taskId: next.id,
               status: next.status,
@@ -397,7 +404,7 @@ export default function UgcVideoAgentPage() {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [activeTask?.id, activeTask?.status, agentName, currentAgentId, selectedProject]);
+  }, [activeTask?.id, activeTask?.status, agentName, currentAgentId, routeTabId, selectedProject]);
 
   const handleUpload = async (file: File | undefined, kind: UploadKind) => {
     if (!file) return;
@@ -480,7 +487,7 @@ export default function UgcVideoAgentPage() {
     }
 
     const runningTask = getGlobalActiveTask();
-    const activeTab = getActiveWorkbenchTaskTab();
+    const activeTab = getActiveWorkbenchTaskTab(routeTabId || undefined);
     if (runningTask || activeTab) {
       const ok = window.confirm('当前已有任务正在执行。继续提交后，本任务会进入排队，等前一个任务结束后自动开始。');
       if (!ok) return;
@@ -512,6 +519,7 @@ export default function UgcVideoAgentPage() {
         agentId: currentAgentId,
         agentName,
         projectId: selectedProject.id,
+        tabId: routeTabId || undefined,
         projectName: selectedProject.name,
         taskId: task.id,
         status: task.status,
@@ -562,6 +570,7 @@ export default function UgcVideoAgentPage() {
             agentId: currentAgentId,
             agentName,
             projectId: selectedProject.id,
+            tabId: routeTabId || undefined,
             projectName: selectedProject.name,
             taskId: next.id,
             status: next.status,
@@ -582,6 +591,7 @@ export default function UgcVideoAgentPage() {
             agentId: currentAgentId,
             agentName,
             projectId: selectedProject.id,
+            tabId: routeTabId || undefined,
             projectName: selectedProject.name,
             taskId: next.id,
             status: next.status,
@@ -603,6 +613,7 @@ export default function UgcVideoAgentPage() {
           agentId: currentAgentId,
           agentName,
           projectId: selectedProject.id,
+          tabId: routeTabId || undefined,
           projectName: selectedProject.name,
           taskId: next.id,
           status: next.status,

@@ -1,9 +1,10 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import { ChevronDown, Eye, FolderKanban, Plus, RefreshCw } from 'lucide-react';
+import { Bot, ChevronDown, Eye, FolderKanban, Plus, RefreshCw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
   createProject,
   getProjects,
+  setPendingAgentContext,
   subscribeProjects,
 } from '../../lib/projectStore';
 import {
@@ -21,6 +22,13 @@ import TaskStatusBadge, {
   formatDuration,
   formatTime,
 } from '../../components/app/tasks/TaskStatusBadge';
+import {
+  getAgentSessions,
+  loadAgentSessionsFromServer,
+  subscribeAgentSessions,
+  type AgentWorkSession,
+} from '../../lib/agentSessionStore';
+import { getAgentWorkbenchPath } from '../../lib/agentWorkbench';
 import { formatTokenRange } from '../../lib/tokenBilling';
 import type { ProjectProfile, Task } from '../../types/workbench';
 
@@ -28,6 +36,7 @@ export default function ProjectsPage() {
   const navigate = useNavigate();
   const projects = useSyncExternalStore(subscribeProjects, getProjects, getProjects);
   const localTasks = useSyncExternalStore(subscribeTasks, getTasks, getTasks);
+  const sessions = useSyncExternalStore(subscribeAgentSessions, getAgentSessions, getAgentSessions);
   const [remoteTasks, setRemoteTasks] = useState<Task[]>([]);
   const [expandedProjectIds, setExpandedProjectIds] = useState<string[]>([]);
   const tasks = mergeTasks(localTasks, remoteTasks);
@@ -45,6 +54,7 @@ export default function ProjectsPage() {
 
   useEffect(() => {
     let mounted = true;
+    loadAgentSessionsFromServer().catch(() => {});
     listRemoteTasks()
       .then((items) => {
         if (mounted) setRemoteTasks(items);
@@ -67,6 +77,18 @@ export default function ProjectsPage() {
     if (!task) return;
     runGeoTask(task.id);
     navigate(`/app/tasks/${task.id}`);
+  };
+
+  const handleOpenSession = (session: AgentWorkSession) => {
+    setPendingAgentContext({
+      agentId: session.agentId,
+      taskScope: 'project',
+      projectId: session.projectId,
+      projectName: session.projectName,
+      tabId: session.id,
+      createdAt: new Date().toISOString(),
+    });
+    navigate(`${getAgentWorkbenchPath(session.agentId)}?project=${session.projectId}&tab=${encodeURIComponent(session.id)}`);
   };
 
   const toggleProject = (projectId: string) => {
@@ -116,8 +138,10 @@ export default function ProjectsPage() {
                 key={project.id}
                 project={project}
                 tasks={tasks.filter((task) => task.projectId === project.id)}
+                sessions={sessions.filter((session) => session.projectId === project.id)}
                 open={expandedProjectIds.includes(project.id)}
                 onToggle={() => toggleProject(project.id)}
+                onOpenSession={handleOpenSession}
                 onOpenTask={(taskId) => navigate(`/app/tasks/${taskId}`)}
                 onRerunTask={handleRerunTask}
               />
@@ -139,26 +163,37 @@ function mergeTasks(localTasks: Task[], remoteTasks: Task[]): Task[] {
 function ProjectAccordion({
   project,
   tasks,
+  sessions,
   open,
   onToggle,
+  onOpenSession,
   onOpenTask,
   onRerunTask,
 }: {
   project: ProjectProfile;
   tasks: Task[];
+  sessions: AgentWorkSession[];
   open: boolean;
   onToggle: () => void;
+  onOpenSession: (session: AgentWorkSession) => void;
   onOpenTask: (taskId: string) => void;
   onRerunTask: (taskId: string) => void;
 }) {
   const runningCount = tasks.filter((task) => task.status !== 'completed').length;
   const completedCount = tasks.filter((task) => task.status === 'completed').length;
-  const latest = [...tasks].sort(
+  const latestTask = [...tasks].sort(
     (a, b) =>
       new Date(b.updatedAt ?? b.completedAt ?? b.createdAt).getTime() -
       new Date(a.updatedAt ?? a.completedAt ?? a.createdAt).getTime(),
   )[0];
-  const latestTime = latest?.updatedAt ?? latest?.completedAt ?? latest?.createdAt ?? project.updatedAt;
+  const latestSession = [...sessions].sort(
+    (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+  )[0];
+  const latestTaskTime = latestTask?.updatedAt ?? latestTask?.completedAt ?? latestTask?.createdAt;
+  const latestTime =
+    [latestTaskTime, latestSession?.updatedAt, project.updatedAt]
+      .filter((value): value is string => Boolean(value))
+      .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0] || project.updatedAt;
 
   return (
     <article className="rounded-xl transition-colors hover:bg-black/[0.02]">
@@ -175,11 +210,11 @@ function ProjectAccordion({
         <div className="min-w-0">
           <p className="truncate text-base font-bold text-black/82">{project.name}</p>
           <p className="mt-1 truncate text-xs text-black/40">
-            {project.brandName || '未填写品牌名'} · 任务中 {runningCount} · 已完成 {completedCount}
+            {project.brandName || '未填写品牌名'} · 工作会话 {sessions.length} · 任务中 {runningCount} · 已完成 {completedCount}
           </p>
         </div>
         <div className="ml-auto flex shrink-0 items-center gap-3">
-          {latest ? <TaskStatusBadge status={latest.status} /> : null}
+          {latestTask ? <TaskStatusBadge status={latestTask.status} /> : null}
           <span className="min-w-12 text-right text-sm font-medium text-black/38">
             {formatRelativeTime(latestTime)}
           </span>
@@ -188,6 +223,10 @@ function ProjectAccordion({
 
       {open ? (
         <div className="px-4 pb-4 pt-2">
+          <ProjectSessionsList
+            sessions={sessions}
+            onOpenSession={onOpenSession}
+          />
           <ProjectTasksList
             tasks={tasks}
             onOpenTask={onOpenTask}
@@ -196,6 +235,81 @@ function ProjectAccordion({
         </div>
       ) : null}
     </article>
+  );
+}
+
+function ProjectSessionsList({
+  sessions,
+  onOpenSession,
+}: {
+  sessions: AgentWorkSession[];
+  onOpenSession: (session: AgentWorkSession) => void;
+}) {
+  return (
+    <div className="mb-4">
+      <div className="mb-3 flex items-center justify-between">
+        <p className="text-sm font-bold text-black/75">工作会话</p>
+        <span className="rounded-full bg-[#F2F0ED] px-2.5 py-1 text-[11px] font-semibold text-black/45">
+          {sessions.length}
+        </span>
+      </div>
+      {sessions.length === 0 ? (
+        <p className="rounded-xl border border-dashed border-black/10 bg-[#FCFCFD] px-4 py-5 text-center text-sm text-black/35">
+          当前项目还没有已操作的智能体。打开智能体并填写内容后，会在这里展示。
+        </p>
+      ) : (
+        <div className="space-y-2">
+          {sessions.map((session) => (
+            <div
+              key={session.id}
+              className="rounded-xl border border-black/8 bg-[#FCFCFD] px-4 py-3"
+            >
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Bot className="h-4 w-4 text-black/35" />
+                    <p className="truncate text-sm font-bold text-black/80">{session.agentName}</p>
+                    <SessionStatusBadge status={session.status} />
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-black/40">
+                    <span>{session.projectName}</span>
+                    <span>{formatTime(session.updatedAt)}</span>
+                    {session.taskId ? <span className="font-mono">任务 {session.taskId}</span> : null}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onOpenSession(session)}
+                  className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-black/10 bg-white px-3 text-xs font-bold text-black/65 hover:border-black/20"
+                >
+                  <Eye className="h-3.5 w-3.5" />
+                  打开
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SessionStatusBadge({ status }: { status: AgentWorkSession['status'] }) {
+  const config: Record<AgentWorkSession['status'], { label: string; className: string }> = {
+    draft: { label: '已填写', className: 'bg-black/5 text-black/45' },
+    queued: { label: '排队中', className: 'bg-violet-50 text-violet-700' },
+    awaiting_input: { label: '等待参数', className: 'bg-cyan-50 text-cyan-700' },
+    running: { label: '执行中', className: 'bg-blue-50 text-blue-700' },
+    waiting_confirmation: { label: '等待确认', className: 'bg-amber-50 text-amber-700' },
+    completed: { label: '已完成', className: 'bg-emerald-50 text-emerald-700' },
+    failed: { label: '失败', className: 'bg-red-50 text-red-600' },
+    cancelled: { label: '已取消', className: 'bg-black/5 text-black/45' },
+  };
+  const item = config[status];
+  return (
+    <span className={`px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${item.className}`}>
+      {item.label}
+    </span>
   );
 }
 
