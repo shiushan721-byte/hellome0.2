@@ -17,15 +17,24 @@ import {
   getProject,
   subscribeProjects,
 } from '../../lib/projectStore';
-import { createGeoTask } from '../../lib/taskStore';
+import { createGeoTask, getGlobalActiveTask } from '../../lib/taskStore';
 import { runGeoTask } from '../../lib/geoTaskRunner';
 import { DEFAULT_GEO_MODELS } from '../../types/workbench';
+import {
+  attachWorkbenchTabTask,
+  getActiveWorkbenchTaskTab,
+  getWorkbenchTabForProjectAgent,
+  markWorkbenchTabDraft,
+} from '../../lib/workbenchTabs';
 
 const MODELS = ['豆包', 'DeepSeek', '腾讯元宝', 'Kimi', '文心一言', 'Qwen', '智谱', 'MiniMax'];
 
 export default function GeoAgentPage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const searchParams = new URLSearchParams(location.search);
+  const launchKey = searchParams.get('launch') ?? '';
+  const routeTabId = searchParams.get('tab') ?? '';
   const entry = (location.state as AgentEntryState | null) ?? {};
   const agent = getAgentById(entry.agentId ?? 'geo');
   const agentName = agent?.name ?? 'GEO 智能体';
@@ -47,6 +56,7 @@ export default function GeoAgentPage() {
   const [notes, setNotes] = useState('');
   const [error, setError] = useState('');
   const [contextReady, setContextReady] = useState(false);
+  const [hasUserEdited, setHasUserEdited] = useState(false);
   const hermes = useSyncExternalStore(
     subscribeHermesConnection,
     getHermesConnection,
@@ -60,23 +70,37 @@ export default function GeoAgentPage() {
   }, []);
 
   useEffect(() => {
-    if (contextReady) return;
+    setContextReady(false);
+    setHasUserEdited(false);
     const context = consumePendingAgentContext('geo');
     if (context?.taskScope === 'project') {
       setSelectedProjectId(context.projectId);
       const project = getProject(context.projectId);
       if (project) {
         const preset = buildGeoInputFromProject(project);
-        setBrandName(preset.brandName || '');
-        setWebsiteUrl(preset.websiteUrl || '');
-        setKeywords(preset.keywords || '');
-        setCompetitors(preset.competitors || '');
-        setProductService(project.productIntro || '');
-        setNotes(project.notes || '');
+        const tabDraft = (routeTabId ? undefined : getWorkbenchTabForProjectAgent(context.projectId, 'geo')?.draftInput) as
+          | Partial<{
+              brandName: string;
+              websiteUrl: string;
+              keywords: string;
+              competitors: string;
+              productService: string;
+              targetMarket: string;
+              notes: string;
+            }>
+          | undefined;
+        setHasUserEdited(Boolean(tabDraft));
+        setBrandName(tabDraft?.brandName || preset.brandName || '');
+        setWebsiteUrl(tabDraft?.websiteUrl || preset.websiteUrl || '');
+        setKeywords(tabDraft?.keywords || preset.keywords || '');
+        setCompetitors(tabDraft?.competitors || preset.competitors || '');
+        setProductService(tabDraft?.productService || project.productIntro || '');
+        setTargetMarket(tabDraft?.targetMarket || '');
+        setNotes(tabDraft?.notes || project.notes || '');
       }
     }
     setContextReady(true);
-  }, [contextReady]);
+  }, [agentName, launchKey]);
 
   useEffect(() => {
     if (!isRunning) {
@@ -98,6 +122,49 @@ export default function GeoAgentPage() {
     depth: 'standard' as const,
   };
 
+  useEffect(() => {
+    if (!contextReady || !selectedProjectId || !selectedProject) return;
+    if (!hasUserEdited) return;
+    const hasDraft =
+      brandName.trim() ||
+      websiteUrl.trim() ||
+      keywords.trim() ||
+      competitors.trim() ||
+      productService.trim() ||
+      targetMarket.trim() ||
+      notes.trim();
+    if (!hasDraft) return;
+    markWorkbenchTabDraft({
+      agentId: 'geo',
+      agentName,
+      projectId: selectedProject.id,
+      tabId: routeTabId || undefined,
+      projectName: selectedProject.name,
+      draftInput: {
+        brandName,
+        websiteUrl,
+        keywords,
+        competitors,
+        productService,
+        targetMarket,
+        notes,
+      },
+    });
+  }, [
+    agentName,
+    brandName,
+    competitors,
+    contextReady,
+    hasUserEdited,
+    keywords,
+    notes,
+    productService,
+    selectedProject,
+    selectedProjectId,
+    targetMarket,
+    websiteUrl,
+  ]);
+
   const handleExecute = () => {
     setError('');
     if (hermes.status !== 'connected') {
@@ -116,7 +183,22 @@ export default function GeoAgentPage() {
       setError('请至少填写官网 URL 或补充说明');
       return;
     }
+    const activeTask = getGlobalActiveTask();
+    const activeTab = getActiveWorkbenchTaskTab(routeTabId || undefined);
+    if (activeTask || activeTab) {
+      const ok = window.confirm('当前已有任务正在执行。继续提交后，本任务会进入排队，等前一个任务结束后自动开始。');
+      if (!ok) return;
+    }
     const task = createGeoTask(draftInput, { projectId: selectedProjectId });
+    attachWorkbenchTabTask({
+      agentId: 'geo',
+      agentName,
+      projectId: selectedProject.id,
+      tabId: routeTabId || undefined,
+      projectName: selectedProject.name,
+      taskId: task.id,
+      status: task.status,
+    });
     runGeoTask(task.id);
     navigate(`/app/tasks/${task.id}`);
   };
@@ -186,10 +268,10 @@ export default function GeoAgentPage() {
             </div>
 
             <div className="mt-5 grid md:grid-cols-2 gap-3">
-              <Field label="品牌名称 *" value={brandName} onChange={setBrandName} placeholder="例如：HelloMe" />
-              <Field label="城市 / 目标市场" value={targetMarket} onChange={setTargetMarket} placeholder="例如：上海 / 全国" />
-              <Field label="产品 / 服务" value={productService} onChange={setProductService} placeholder="例如：AI 智能体平台" />
-              <Field label="官网 URL（可选）" value={websiteUrl} onChange={setWebsiteUrl} placeholder="https://example.com" />
+              <Field label="品牌名称 *" value={brandName} onChange={(value) => { setHasUserEdited(true); setBrandName(value); }} placeholder="例如：HelloMe" />
+              <Field label="城市 / 目标市场" value={targetMarket} onChange={(value) => { setHasUserEdited(true); setTargetMarket(value); }} placeholder="例如：上海 / 全国" />
+              <Field label="产品 / 服务" value={productService} onChange={(value) => { setHasUserEdited(true); setProductService(value); }} placeholder="例如：AI 智能体平台" />
+              <Field label="官网 URL（可选）" value={websiteUrl} onChange={(value) => { setHasUserEdited(true); setWebsiteUrl(value); }} placeholder="https://example.com" />
             </div>
 
             <p className="mt-2 text-[11px] text-[#14958A] font-medium">
@@ -207,7 +289,10 @@ export default function GeoAgentPage() {
                 </div>
                 <input
                   value={keywords}
-                  onChange={(event) => setKeywords(event.target.value)}
+                  onChange={(event) => {
+                    setHasUserEdited(true);
+                    setKeywords(event.target.value);
+                  }}
                   className="mt-2 h-10 w-full rounded-lg border border-black/10 px-3 text-sm outline-none focus:border-[#14958A]/40"
                   placeholder="智能体平台, GEO 优化"
                 />
@@ -217,7 +302,10 @@ export default function GeoAgentPage() {
                 <p className="text-xs font-medium text-black/60">竞品名称</p>
                 <input
                   value={competitors}
-                  onChange={(event) => setCompetitors(event.target.value)}
+                  onChange={(event) => {
+                    setHasUserEdited(true);
+                    setCompetitors(event.target.value);
+                  }}
                   className="mt-2 h-10 w-full rounded-lg border border-black/10 px-3 text-sm outline-none focus:border-[#14958A]/40"
                   placeholder="竞品 A, 竞品 B"
                 />
@@ -227,7 +315,10 @@ export default function GeoAgentPage() {
                 <p className="text-xs font-medium text-black/60">补充说明</p>
                 <textarea
                   value={notes}
-                  onChange={(event) => setNotes(event.target.value)}
+                  onChange={(event) => {
+                    setHasUserEdited(true);
+                    setNotes(event.target.value);
+                  }}
                   className="mt-2 min-h-[96px] w-full rounded-lg border border-black/10 bg-[#FCFCFD] px-3 py-2 text-sm leading-relaxed outline-none focus:border-[#14958A]/40"
                   placeholder="可补充品牌背景、产品特点、目标客户，项目资料会自动带入这里。"
                 />

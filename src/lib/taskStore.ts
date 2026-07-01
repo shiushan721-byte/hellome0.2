@@ -3,6 +3,7 @@ import { GEO_STEPS } from '../types/workbench';
 import { getProject, updateProjectFromGeoInput } from './projectStore';
 import { estimateGeoTokens } from './tokenBilling';
 import { ensureDemoTasks } from './taskSeed';
+import { syncWorkbenchTabFromTask } from './workbenchTabs';
 
 const TASKS_KEY = 'hellome_tasks';
 const EMPTY_TASKS: Task[] = [];
@@ -113,6 +114,7 @@ export function saveTask(task: Task): void {
   if (idx >= 0) tasks[idx] = task;
   else tasks.unshift(task);
   localStorage.setItem(TASKS_KEY, JSON.stringify(tasks));
+  syncWorkbenchTabFromTask(task);
   notify();
 }
 

@@ -37,6 +37,13 @@ import {
   getProject,
   subscribeProjects,
 } from '../../lib/projectStore';
+import { getGlobalActiveTask } from '../../lib/taskStore';
+import {
+  attachWorkbenchTabTask,
+  getActiveWorkbenchTaskTab,
+  getWorkbenchTabForProjectAgent,
+  markWorkbenchTabDraft,
+} from '../../lib/workbenchTabs';
 
 type ExecutionPreset = {
   platform: string;
@@ -205,6 +212,7 @@ export default function UgcVideoAgentPage() {
   const activeProjectId = useSyncExternalStore(subscribeProjects, getActiveProjectId, getActiveProjectId);
   const [selectedProjectId, setSelectedProjectId] = useState(activeProjectId);
   const [contextReady, setContextReady] = useState(false);
+  const [hasUserEdited, setHasUserEdited] = useState(false);
 
   const title = skillExperience?.title ?? profile?.title ?? '视频智能体';
   const promiseLine =
@@ -247,9 +255,32 @@ export default function UgcVideoAgentPage() {
     const context = consumePendingAgentContext(currentAgentId);
     if (context?.taskScope === 'project') {
       setSelectedProjectId(context.projectId);
+      const tabDraft = getWorkbenchTabForProjectAgent(context.projectId, currentAgentId)?.draftInput as
+        | Partial<{
+            referenceUrl: string;
+            productAsset: UploadedAsset | null;
+            talentAsset: UploadedAsset | null;
+            selectedOptions: Record<string, string>;
+            businessDescription: string;
+            businessDescriptionTouched: boolean;
+            showOptionalSettings: boolean;
+          }>
+        | undefined;
+      setHasUserEdited(Boolean(tabDraft));
+      if (tabDraft) {
+        setReferenceUrl(tabDraft.referenceUrl || '');
+        setProductAsset(tabDraft.productAsset ?? null);
+        setTalentAsset(tabDraft.talentAsset ?? null);
+        if (tabDraft.selectedOptions) setSelectedOptions(tabDraft.selectedOptions);
+        if (tabDraft.businessDescription) {
+          setBusinessDescription(tabDraft.businessDescription);
+          setBusinessDescriptionTouched(tabDraft.businessDescriptionTouched ?? true);
+        }
+        setShowOptionalSettings(Boolean(tabDraft.showOptionalSettings || tabDraft.referenceUrl));
+      }
     }
     setContextReady(true);
-  }, [contextReady, currentAgentId]);
+  }, [agentName, contextReady, currentAgentId]);
 
   const autoBusinessDescription = useMemo(
     () => buildBusinessDescription(title, businessBlueprint, selectedOptions),
@@ -288,6 +319,47 @@ export default function UgcVideoAgentPage() {
   const selectedProject = getProject(selectedProjectId);
 
   useEffect(() => {
+    if (!contextReady || !selectedProject || formLocked) return;
+    if (!hasUserEdited) return;
+    const hasDraft =
+      referenceUrl.trim() ||
+      productAsset ||
+      talentAsset ||
+      businessDescription.trim() ||
+      Object.values(selectedOptions).some(Boolean);
+    if (!hasDraft) return;
+    markWorkbenchTabDraft({
+      agentId: currentAgentId,
+      agentName,
+      projectId: selectedProject.id,
+      projectName: selectedProject.name,
+      draftInput: {
+        referenceUrl,
+        productAsset,
+        talentAsset,
+        selectedOptions,
+        businessDescription,
+        businessDescriptionTouched,
+        showOptionalSettings,
+      },
+    });
+  }, [
+    agentName,
+    businessDescription,
+    businessDescriptionTouched,
+    contextReady,
+    currentAgentId,
+    formLocked,
+    hasUserEdited,
+    productAsset,
+    referenceUrl,
+    selectedOptions,
+    selectedProject,
+    showOptionalSettings,
+    talentAsset,
+  ]);
+
+  useEffect(() => {
     if (!activeTask?.id || !activeTask.status || isTerminalTaskStatus(activeTask.status)) return;
     let cancelled = false;
     const taskId = activeTask.id;
@@ -297,6 +369,16 @@ export default function UgcVideoAgentPage() {
         const next = await getRemoteTask(taskId);
         if (!cancelled) {
           setActiveTask(next);
+          if (selectedProject) {
+            attachWorkbenchTabTask({
+              agentId: currentAgentId,
+              agentName,
+              projectId: selectedProject.id,
+              projectName: selectedProject.name,
+              taskId: next.id,
+              status: next.status,
+            });
+          }
           setTaskError('');
         }
       } catch (fetchError) {
@@ -315,7 +397,7 @@ export default function UgcVideoAgentPage() {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [activeTask?.id, activeTask?.status]);
+  }, [activeTask?.id, activeTask?.status, agentName, currentAgentId, selectedProject]);
 
   const handleUpload = async (file: File | undefined, kind: UploadKind) => {
     if (!file) return;
@@ -336,6 +418,7 @@ export default function UgcVideoAgentPage() {
     setUploadingKind(kind);
     try {
       const uploaded = await uploadTaskFile(file);
+      setHasUserEdited(true);
       if (kind === 'product') {
         setProductAsset({ url: uploaded.url, fileName: uploaded.fileName });
       } else {
@@ -353,6 +436,7 @@ export default function UgcVideoAgentPage() {
 
   const handleRemoveAsset = (kind: UploadKind) => {
     if (formLocked) return;
+    setHasUserEdited(true);
     setUploadErrors((current) => ({
       ...current,
       [kind]: undefined,
@@ -368,6 +452,7 @@ export default function UgcVideoAgentPage() {
 
   const handleSelectOption = (groupId: string, value: string) => {
     if (formLocked) return;
+    setHasUserEdited(true);
     setSelectedOptions((current) => ({
       ...current,
       [groupId]: value,
@@ -394,6 +479,13 @@ export default function UgcVideoAgentPage() {
       return;
     }
 
+    const runningTask = getGlobalActiveTask();
+    const activeTab = getActiveWorkbenchTaskTab();
+    if (runningTask || activeTab) {
+      const ok = window.confirm('当前已有任务正在执行。继续提交后，本任务会进入排队，等前一个任务结束后自动开始。');
+      if (!ok) return;
+    }
+
     setIsSubmitting(true);
     setError('');
 
@@ -416,6 +508,14 @@ export default function UgcVideoAgentPage() {
         projectName: selectedProject.name,
       };
       const task = await createRemoteUgcTask(payload, taskContext);
+      attachWorkbenchTabTask({
+        agentId: currentAgentId,
+        agentName,
+        projectId: selectedProject.id,
+        projectName: selectedProject.name,
+        taskId: task.id,
+        status: task.status,
+      });
       setActiveTask({
         ...task,
         ...taskContext,
@@ -457,6 +557,16 @@ export default function UgcVideoAgentPage() {
     try {
       if (activeTask.status === 'waiting_confirmation') {
         const next = await confirmRemoteTask(activeTask.id);
+        if (selectedProject) {
+          attachWorkbenchTabTask({
+            agentId: currentAgentId,
+            agentName,
+            projectId: selectedProject.id,
+            projectName: selectedProject.name,
+            taskId: next.id,
+            status: next.status,
+          });
+        }
         setActiveTask({ ...next, events: activeTask.events });
         return;
       }
@@ -467,6 +577,16 @@ export default function UgcVideoAgentPage() {
           activeTask.recoveryState.resumeMode === 'retry_step')
       ) {
         const next = await retryRemoteTask(activeTask.id);
+        if (selectedProject) {
+          attachWorkbenchTabTask({
+            agentId: currentAgentId,
+            agentName,
+            projectId: selectedProject.id,
+            projectName: selectedProject.name,
+            taskId: next.id,
+            status: next.status,
+          });
+        }
         setActiveTask({ ...next, events: activeTask.events });
       }
     } catch (actionError) {
@@ -478,6 +598,16 @@ export default function UgcVideoAgentPage() {
     if (!activeTask) return;
     try {
       const next = await cancelRemoteTask(activeTask.id);
+      if (selectedProject) {
+        attachWorkbenchTabTask({
+          agentId: currentAgentId,
+          agentName,
+          projectId: selectedProject.id,
+          projectName: selectedProject.name,
+          taskId: next.id,
+          status: next.status,
+        });
+      }
       setActiveTask({ ...next, events: activeTask.events });
       setTaskError('');
     } catch (cancelError) {
@@ -621,6 +751,7 @@ export default function UgcVideoAgentPage() {
                     value={businessDescription}
                     onChange={(value) => {
                       if (formLocked) return;
+                      setHasUserEdited(true);
                       setBusinessDescriptionTouched(true);
                       setBusinessDescription(value);
                     }}
@@ -650,6 +781,7 @@ export default function UgcVideoAgentPage() {
                       value={referenceUrl}
                       onChange={(value) => {
                         if (formLocked) return;
+                        setHasUserEdited(true);
                         setReferenceUrl(value);
                       }}
                       icon={Link2}

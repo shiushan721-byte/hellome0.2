@@ -1,7 +1,6 @@
 import { isAuthenticated } from './auth';
 import { isHermesConnected } from './firstRunOnboarding';
 import { stashIntent, type AgentIntentAction, type PendingAgentIntent } from './pendingAgentIntent';
-import { openAgentWorkspace } from './openAgentWorkspace';
 
 export type UseAgentBlockReason = 'login' | 'hermes' | 'recharge' | 'unavailable';
 
@@ -47,7 +46,8 @@ export function stashUseAgentIntent(agentId: string, options: UseAgentOptions = 
 }
 
 /**
- * 统一「使用智能体」判断：登录 → 配对 → 充值 → 打开工作台
+ * 统一「使用智能体」判断：登录 → 配对 → 充值。
+ * 真正打开工作台需要先确认项目，由调用方在项目选择后处理。
  * 返回结果供调用方展示弹窗或跳转。
  */
 export function tryUseAgent(agentId: string, options: UseAgentOptions = {}): UseAgentResult {
@@ -60,6 +60,5 @@ export function tryUseAgent(agentId: string, options: UseAgentOptions = {}): Use
     return { ok: false, reason: block, agentId };
   }
 
-  openAgentWorkspace(agentId);
   return { ok: true, agentId };
 }

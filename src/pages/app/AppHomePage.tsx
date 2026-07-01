@@ -12,8 +12,9 @@ import {
 import { getHomeDashboardData, getHomeEmptyMarketCards } from '../../lib/homeDashboard';
 import {
   getLastOpenedAgentId,
+  getLastOpenedTabId,
+  getWorkbenchTab,
   getVisibleRecentAgentIds,
-  openAgentTab,
   sortRecentAgentSummaries,
   subscribeWorkbenchTabs,
 } from '../../lib/workbenchTabs';
@@ -25,6 +26,7 @@ import { tryUseAgent } from '../../lib/useAgentAccess';
 import { getAgentWorkbenchPath } from '../../lib/agentWorkbench';
 import AgentProjectChoiceModal from '../../components/app/projects/AgentProjectChoiceModal';
 import type { AgentMarketCard } from '../../types/agentsPage';
+import { setPendingAgentContext } from '../../lib/projectStore';
 
 export default function AppHomePage() {
   const navigate = useNavigate();
@@ -53,7 +55,6 @@ export default function AppHomePage() {
 
   useEffect(() => {
     if (!requestedAgentId) return;
-    if (!getVisibleRecentAgentIds().includes(requestedAgentId)) return;
     const agent = getAgentById(requestedAgentId);
     if (!agent?.available) return;
 
@@ -64,6 +65,15 @@ export default function AppHomePage() {
     }
     if (result.reason === 'recharge') {
       navigate('/app/usage');
+      return;
+    }
+    if (result.ok) {
+      const marketAgent = getHomeEmptyMarketCards().find((card) => card.id === requestedAgentId);
+      if (marketAgent) {
+        setProjectChoiceAgent(marketAgent);
+      } else {
+        navigate(`${getAgentWorkbenchPath(requestedAgentId)}?launch=${Date.now()}`);
+      }
     }
   }, [requestedAgentId, lowBalance, navigate]);
 
@@ -99,9 +109,9 @@ export default function AppHomePage() {
     }
   };
 
-  const openAgentAfterProjectChoice = (agentId: string) => {
+  const openAgentAfterProjectChoice = (agentId: string, projectId: string, tabId: string) => {
     setProjectChoiceAgent(null);
-    navigate(getAgentWorkbenchPath(agentId));
+    navigate(`${getAgentWorkbenchPath(agentId)}?project=${encodeURIComponent(projectId)}&tab=${encodeURIComponent(tabId)}&launch=${Date.now()}`);
   };
 
   if (
@@ -111,12 +121,31 @@ export default function AppHomePage() {
     isHermesConnected() &&
     !lowBalance
   ) {
-    openAgentTab(requestedAgentId);
+    const tab = getWorkbenchTab(getLastOpenedTabId() || '');
+    if (tab?.agentId === requestedAgentId) {
+      setPendingAgentContext({
+        agentId: tab.agentId,
+        taskScope: 'project',
+        projectId: tab.projectId,
+        projectName: tab.projectName,
+        createdAt: new Date().toISOString(),
+      });
+    }
     const state: AgentEntryState = { from: getAgentWorkbenchPath(requestedAgentId), agentId: requestedAgentId };
     return <Navigate to={getAgentWorkbenchPath(requestedAgentId)} replace state={state} />;
   }
 
   if (activeAgentId && isHermesConnected() && !lowBalance) {
+    const tab = getWorkbenchTab(getLastOpenedTabId() || '');
+    if (tab?.agentId === activeAgentId) {
+      setPendingAgentContext({
+        agentId: tab.agentId,
+        taskScope: 'project',
+        projectId: tab.projectId,
+        projectName: tab.projectName,
+        createdAt: new Date().toISOString(),
+      });
+    }
     const state: AgentEntryState = { from: getAgentWorkbenchPath(activeAgentId), agentId: activeAgentId };
     return <Navigate to={getAgentWorkbenchPath(activeAgentId)} replace state={state} />;
   }

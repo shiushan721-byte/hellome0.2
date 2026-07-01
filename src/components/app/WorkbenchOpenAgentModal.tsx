@@ -1,11 +1,18 @@
 import { useMemo, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
-import { Search, X } from 'lucide-react';
+import { FolderPlus, Search, X } from 'lucide-react';
 import AgentIcon from './agents/AgentIcon';
 import { CATEGORIES, getAgentById, type AgentCategory } from '../../data/agentsCatalog';
 import { getFullyRunAgentIds, getTasks, subscribeTasks } from '../../lib/taskStore';
-import { isAgentTabOpen } from '../../lib/workbenchTabs';
+import { openWorkbenchTab } from '../../lib/workbenchTabs';
 import type { EnabledAgentSummary } from '../../types/homeDashboard';
+import {
+  createProject,
+  getProjects,
+  setActiveProjectId,
+  setPendingAgentContext,
+  subscribeProjects,
+} from '../../lib/projectStore';
 
 type OpenAgentFilter = AgentCategory | 'recent';
 
@@ -26,39 +33,29 @@ function gridContentHeight(agentCount: number): number {
 
 interface WorkbenchOpenAgentModalProps {
   agents: EnabledAgentSummary[];
-  onOpen: (agentId: string) => void;
+  defaultProjectId?: string;
+  onOpen: (agentId: string, projectId: string, tabId: string) => void;
   onClose: () => void;
 }
 
 function OpenAgentPickerCard({
   agent,
-  alreadyOpen,
   onOpen,
 }: {
   agent: EnabledAgentSummary;
-  alreadyOpen: boolean;
   onOpen: () => void;
 }) {
   return (
-    <div
-      className={`bg-white rounded-2xl p-4 border shadow-sm flex flex-col h-[180px] ${
-        alreadyOpen ? 'border-black/[0.04] opacity-55' : 'border-black/[0.04]'
-      }`}
-    >
+    <div className="bg-white rounded-2xl p-4 border border-black/[0.04] shadow-sm flex flex-col h-[180px]">
       <AgentIcon src={agent.iconSrc} alt={agent.name} size="md" className="mb-3" />
       <h3 className="text-sm font-bold text-[#1A1A1A] mb-1.5">{agent.name}</h3>
       <p className="text-xs text-black/45 leading-relaxed line-clamp-2 flex-1 mb-3">{agent.description}</p>
       <button
         type="button"
-        disabled={alreadyOpen}
         onClick={onOpen}
-        className={`w-full py-2 text-xs font-bold rounded-lg ${
-          alreadyOpen
-            ? 'bg-black/10 text-black/40 cursor-not-allowed'
-            : 'bg-black text-white hover:bg-black/85'
-        }`}
+        className="w-full py-2 text-xs font-bold rounded-lg bg-black text-white hover:bg-black/85"
       >
-        {alreadyOpen ? '已打开' : '打开智能体'}
+        打开智能体
       </button>
     </div>
   );
@@ -66,11 +63,16 @@ function OpenAgentPickerCard({
 
 export default function WorkbenchOpenAgentModal({
   agents,
+  defaultProjectId,
   onOpen,
   onClose,
 }: WorkbenchOpenAgentModalProps) {
+  const projects = useSyncExternalStore(subscribeProjects, getProjects, getProjects);
   const [category, setCategory] = useState<OpenAgentFilter>('all');
   const [query, setQuery] = useState('');
+  const [selectedProjectId, setSelectedProjectId] = useState(defaultProjectId || projects[0]?.id || '');
+  const [creatingProject, setCreatingProject] = useState(projects.length === 0);
+  const [projectName, setProjectName] = useState('');
   const taskRevision = useSyncExternalStore(
     subscribeTasks,
     () => getTasks().map((task) => `${task.id}:${task.status}:${task.updatedAt}`).join(','),
@@ -109,6 +111,32 @@ export default function WorkbenchOpenAgentModal({
     [filteredAgents.length],
   );
 
+  const openWithProject = (agent: EnabledAgentSummary) => {
+    let project = projects.find((item) => item.id === selectedProjectId) ?? null;
+    if (creatingProject || !project) {
+      project = createProject({ name: projectName.trim() || `${agent.name} 项目` });
+    }
+    if (!project) return;
+
+    const tab = openWorkbenchTab({
+      agentId: agent.agentId,
+      agentName: agent.name,
+      projectId: project.id,
+      projectName: project.name,
+      status: 'opened',
+    });
+    setActiveProjectId(project.id);
+    setPendingAgentContext({
+      agentId: agent.agentId,
+      taskScope: 'project',
+      projectId: project.id,
+      projectName: project.name,
+      tabId: tab.id,
+      createdAt: new Date().toISOString(),
+    });
+    onOpen(agent.agentId, project.id, tab.id);
+  };
+
   const modal = (
     <div className="fixed inset-0 z-[100] bg-black/25 flex items-center justify-center p-4" onClick={onClose}>
       <div
@@ -137,7 +165,41 @@ export default function WorkbenchOpenAgentModal({
           </button>
         </div>
 
-        <div className="px-4 py-3 bg-[#F5F5F7] border-b border-black/6">
+        <div className="px-4 py-3 bg-[#F5F5F7] border-b border-black/6 space-y-3">
+          <div className="flex flex-col gap-2 rounded-xl border border-black/8 bg-white p-3 sm:flex-row sm:items-center">
+            <div className="flex items-center gap-2 text-xs font-semibold text-black/70">
+              <FolderPlus className="h-4 w-4 text-black/45" />
+              项目
+            </div>
+            {creatingProject ? (
+              <input
+                value={projectName}
+                onChange={(event) => setProjectName(event.target.value)}
+                placeholder="输入新项目名称"
+                className="h-9 min-w-0 flex-1 rounded-lg border border-black/10 bg-[#F7F8FA] px-3 text-sm outline-none focus:border-black/25"
+              />
+            ) : (
+              <select
+                value={selectedProjectId}
+                onChange={(event) => setSelectedProjectId(event.target.value)}
+                className="h-9 min-w-0 flex-1 rounded-lg border border-black/10 bg-[#F7F8FA] px-3 text-sm outline-none focus:border-black/25"
+              >
+                {projects.map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.name}
+                  </option>
+                ))}
+              </select>
+            )}
+            <button
+              type="button"
+              onClick={() => setCreatingProject((value) => !value)}
+              className="h-9 shrink-0 rounded-lg border border-black/10 px-3 text-xs font-bold text-black/62 hover:bg-black/[0.03]"
+            >
+              {creatingProject ? '选择已有项目' : '新建项目'}
+            </button>
+          </div>
+
           <div className="flex items-center gap-1 overflow-x-auto custom-scrollbar pb-1">
             {FILTER_TABS.map((cat) => (
               <button
@@ -170,8 +232,7 @@ export default function WorkbenchOpenAgentModal({
                 <OpenAgentPickerCard
                   key={agent.agentId}
                   agent={agent}
-                  alreadyOpen={isAgentTabOpen(agent.agentId)}
-                  onOpen={() => onOpen(agent.agentId)}
+                  onOpen={() => openWithProject(agent)}
                 />
               ))}
             </div>
