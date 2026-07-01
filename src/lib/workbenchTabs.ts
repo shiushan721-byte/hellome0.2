@@ -1,6 +1,7 @@
 import type { EnabledAgentSummary } from '../types/homeDashboard';
 import type { Task, TaskStatus } from '../types/workbench';
 import { getAgentById } from '../data/agentsCatalog';
+import { upsertAgentSessionFromTab } from './agentSessionStore';
 import { getProject } from './projectStore';
 
 export const WORKBENCH_TABS_MIGRATION_KEY = 'hellome_workbench_tabs_v2';
@@ -342,10 +343,14 @@ export function markWorkbenchTabDraft(input: {
   draftInput: unknown;
 }): void {
   const current = input.tabId ? getWorkbenchTab(input.tabId) : getWorkbenchTabForProjectAgent(input.projectId, input.agentId);
-  openWorkbenchTab({
+  const tab = openWorkbenchTab({
     ...input,
     tabId: input.tabId,
     status: current?.status && current.status !== 'opened' ? current.status : 'draft',
+  });
+  upsertAgentSessionFromTab(tab, {
+    status: tab.status,
+    draftInput: input.draftInput,
   });
 }
 
@@ -358,7 +363,7 @@ export function attachWorkbenchTabTask(input: {
   taskId: string;
   status: TaskStatus | WorkbenchTabStatus;
 }): void {
-  openWorkbenchTab({
+  const tab = openWorkbenchTab({
     agentId: input.agentId,
     agentName: input.agentName,
     projectId: input.projectId,
@@ -366,6 +371,10 @@ export function attachWorkbenchTabTask(input: {
     tabId: input.tabId,
     taskId: input.taskId,
     status: normalizeTabStatus(input.status),
+  });
+  upsertAgentSessionFromTab(tab, {
+    status: tab.status,
+    taskId: input.taskId,
   });
 }
 

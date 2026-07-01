@@ -68,6 +68,7 @@ import {
   pairHermesLocally,
   revokeHermesPairing,
 } from './src/server/hermesPairingService';
+import { listWorkSessions, upsertWorkSession } from './src/server/workSessionService';
 import { createAuthKit } from './复用组件库/auth-login-kit/server-auth-kit';
 import { GnomicSsoError } from './src/server/gnomic/gnomicTypes';
 import { startGnomicSso } from './src/server/gnomic/gnomicSsoService';
@@ -271,6 +272,51 @@ app.post('/api/agentsyun/sso/start', async (req, res) => {
       ok: false,
       code: 'AGENTSYUN_SERVICE_UNAVAILABLE',
       message: 'Agent云 服务暂时不可用，请稍后再试。',
+    });
+  }
+});
+
+app.get('/api/work-sessions', async (req, res) => {
+  try {
+    const externalId = authKit.getCurrentExternalId(req);
+    if (!externalId.trim()) {
+      res.status(401).json({ success: false, error: '请先登录' });
+      return;
+    }
+    const data = await listWorkSessions(externalId);
+    res.json({ success: true, data });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : '读取工作会话失败',
+    });
+  }
+});
+
+app.post('/api/work-sessions', async (req, res) => {
+  try {
+    const externalId = authKit.getCurrentExternalId(req);
+    if (!externalId.trim()) {
+      res.status(401).json({ success: false, error: '请先登录' });
+      return;
+    }
+    const data = await upsertWorkSession(externalId, {
+      id: String(req.body?.id || ''),
+      projectId: String(req.body?.projectId || ''),
+      projectName: String(req.body?.projectName || ''),
+      agentId: String(req.body?.agentId || ''),
+      agentName: String(req.body?.agentName || ''),
+      status: req.body?.status,
+      draftInput: req.body?.draftInput,
+      taskId: typeof req.body?.taskId === 'string' ? req.body.taskId : undefined,
+      createdAt: typeof req.body?.createdAt === 'string' ? req.body.createdAt : undefined,
+      updatedAt: typeof req.body?.updatedAt === 'string' ? req.body.updatedAt : undefined,
+    });
+    res.json({ success: true, data });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      error: error instanceof Error ? error.message : '保存工作会话失败',
     });
   }
 });
