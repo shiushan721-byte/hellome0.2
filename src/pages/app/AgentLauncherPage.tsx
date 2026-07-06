@@ -1,6 +1,6 @@
 import { Navigate, useLocation, useParams } from 'react-router-dom';
 import { getAgentById } from '../../data/agentsCatalog';
-import { isAgentWorkbenchReady } from '../../lib/agentWorkbench';
+import { getAgentWorkbenchPath, isAgentWorkbenchReady } from '../../lib/agentWorkbench';
 import AgentComingSoonPage from './AgentComingSoonPage';
 
 /** /app/agents/:agentId — 从市场或工作台标签进入智能体 */
@@ -13,7 +13,7 @@ export default function AgentLauncherPage() {
   if (!agent?.available) return <Navigate to="/app/agents" replace />;
 
   if (isAgentWorkbenchReady(agentId)) {
-    return <Navigate to="/app/agents/geo" replace state={{ ...location.state, agentId: 'geo' }} />;
+    return <Navigate to={getAgentWorkbenchPath(agentId)} replace state={{ ...location.state, agentId }} />;
   }
 
   return <AgentComingSoonPage agentId={agentId} />;

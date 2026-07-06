@@ -1,6 +1,6 @@
 import { AGENT_SLUG_CATEGORY, resolveAgentCategorySlug } from './agentCategories';
 
-/** 智能体市场默认上架的 15 个智能体（前台卡片、后台 seed、首页标签配置统一来源） */
+/** 智能体市场默认上架的智能体（前台卡片、后台 seed、首页标签配置统一来源） */
 export const MARKET_ONLINE_AGENT_SLUGS = [
   'geo',
   'media-seeding',
@@ -13,6 +13,7 @@ export const MARKET_ONLINE_AGENT_SLUGS = [
   'competitor-scan',
   'sales',
   'outreach-mail',
+  'computer-speed',
   'faq-generator',
   'ppt-outline',
   'hermes-report',
@@ -80,6 +81,10 @@ export const MARKET_AGENT_META: Record<string, { name: string; description: stri
   'outreach-mail': {
     name: '外联开发信',
     description: 'B2B 买家决策链痛点提取，多段式精细化跟进邮件生成。',
+  },
+  'computer-speed': {
+    name: '计算机速度优化智能体',
+    description: '输入电脑卡顿、弹窗广告、桌宠开启等需求，生成普通用户也能照做的优化清单。',
   },
   'copy-audit': {
     name: '文案合规审计',

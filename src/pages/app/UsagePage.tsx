@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { Link } from 'react-router-dom';
-import { FileText, Info, Plus, Wallet } from 'lucide-react';
+import { Database, FileText, Info, Plus, Wallet } from 'lucide-react';
 import { formatTime } from '../../components/app/tasks/TaskStatusBadge';
 import { formatToken, formatTokenRange } from '../../lib/tokenBilling';
 import {
@@ -26,6 +26,13 @@ import {
 } from '../../lib/usageStore';
 import type { UsageLedgerEntry } from '../../types/workbench';
 import { SIGNUP_BONUS_TOKENS } from '../../types/workbench';
+import {
+  formatBytes,
+  getRemainingStorageBytes,
+  getStorageUsage,
+  purchaseStoragePackage,
+  subscribeStorageUsage,
+} from '../../lib/storageQuotaStore';
 
 type TabKey = 'daily' | 'product' | 'request';
 
@@ -40,6 +47,7 @@ const PAGE_SIZE = 20;
 
 export default function UsagePage() {
   useSyncExternalStore(subscribeUsage, getUsage, getUsage);
+  const storageUsage = useSyncExternalStore(subscribeStorageUsage, getStorageUsage, getStorageUsage);
 
   const defaultRange = useMemo(() => getDefaultBillingRange(), []);
   const [activeTab, setActiveTab] = useState<TabKey>('daily');
@@ -60,6 +68,8 @@ export default function UsagePage() {
   const stats = getComputeStats(usage);
   const ledger = getLedger();
   const low = isLowBalance(usage);
+  const storageRemaining = getRemainingStorageBytes(storageUsage);
+  const storagePercent = Math.min(100, Math.round((storageUsage.usedBytes / storageUsage.quotaBytes) * 100));
 
   const agentOptions = useMemo(() => listAgentFilterOptions(ledger), [ledger]);
 
@@ -141,6 +151,45 @@ export default function UsagePage() {
           Token 余额不足，建议及时充值算力，避免任务中断。
         </p>
       ) : null}
+
+      <section className="rounded-xl border border-[#e5e7eb] bg-white shadow-sm overflow-hidden">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between px-5 py-4 border-b border-[#f0f0f0]">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-[#EEF7F1] flex items-center justify-center text-[#246B3D]">
+              <Database size={20} />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-[#111827]">云端空间</p>
+              <p className="text-xs text-black/45 mt-0.5">用于保存上传资料、过程文件和智能体生成成果</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => purchaseStoragePackage(1)}
+            className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#d1d5db] text-xs font-medium text-[#374151] hover:bg-[#f9fafb]"
+          >
+            <Plus size={14} />
+            购买 1GB 空间
+          </button>
+        </div>
+        <div className="px-5 py-5">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+            <Stat label="总空间" value={formatBytes(storageUsage.quotaBytes)} />
+            <Stat label="已使用" value={formatBytes(storageUsage.usedBytes)} highlight={storagePercent >= 90} />
+            <Stat label="剩余空间" value={formatBytes(storageRemaining)} />
+            <Stat label="已购买空间" value={formatBytes(storageUsage.purchasedBytes)} />
+          </div>
+          <div className="mt-5 h-2 rounded-full bg-[#f3f4f6] overflow-hidden">
+            <div
+              className={`h-full rounded-full ${storagePercent >= 90 ? 'bg-amber-500' : 'bg-[#246B3D]'}`}
+              style={{ width: `${storagePercent}%` }}
+            />
+          </div>
+          {storagePercent >= 90 ? (
+            <p className="mt-3 text-xs text-amber-700">云端空间即将用完，建议购买空间后再生成较大的文档、图片或视频成果。</p>
+          ) : null}
+        </div>
+      </section>
 
       <section className="rounded-xl border border-[#e5e7eb] bg-white shadow-sm overflow-hidden flex flex-col min-h-[420px]">
         <div className="flex border-b border-[#e5e7eb] px-2">

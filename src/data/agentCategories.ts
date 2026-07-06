@@ -4,6 +4,7 @@ export type AgentCategory =
   | 'content'
   | 'sales'
   | 'office'
+  | 'student'
   | 'growth'
   | 'data'
   | 'tech';
@@ -14,6 +15,7 @@ export const CATEGORIES: { id: AgentCategory; label: string }[] = [
   { id: 'content', label: '内容创作' },
   { id: 'sales', label: '销售获客' },
   { id: 'office', label: '办公协同' },
+  { id: 'student', label: '学生求职' },
   { id: 'growth', label: '品牌增长' },
   { id: 'data', label: '数据分析' },
   { id: 'tech', label: '技术工程' },
@@ -35,6 +37,9 @@ export const AGENT_SLUG_CATEGORY: Record<string, Exclude<AgentCategory, 'all'>> 
   'faq-generator': 'content',
   'ppt-outline': 'office',
   'outreach-mail': 'sales',
+  'internship-resume': 'student',
+  'internship-job-match': 'student',
+  'computer-speed': 'tech',
   'copy-audit': 'content',
   'sov-tracker': 'growth',
   'prompt-lab': 'tech',

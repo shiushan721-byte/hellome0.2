@@ -68,6 +68,8 @@ import {
   pairHermesLocally,
   revokeHermesPairing,
 } from './src/server/hermesPairingService';
+import { createResumeDiagnosisTask } from './src/server/resumeDiagnosisService';
+import type { ResumeDraft } from './src/types/resume';
 import { listWorkSessions, upsertWorkSession } from './src/server/workSessionService';
 import { createAuthKit } from './复用组件库/auth-login-kit/server-auth-kit';
 import { GnomicSsoError } from './src/server/gnomic/gnomicTypes';
@@ -870,6 +872,34 @@ app.post('/api/tasks/ugc', async (req, res) => {
     res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : '创建 UGC 任务失败',
+    });
+  }
+});
+
+app.post('/api/tasks/resume/diagnosis', async (req, res) => {
+  try {
+    const { input } = req.body as {
+      input?: ResumeDraft;
+      user?: {
+        externalId?: string;
+        displayName?: string;
+        email?: string;
+        phone?: string;
+        workspaceName?: string;
+      };
+    };
+
+    if (!input) {
+      res.status(400).json({ success: false, error: '简历诊断参数不能为空' });
+      return;
+    }
+
+    const data = createResumeDiagnosisTask(input);
+    res.status(201).json({ success: true, data });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      error: error instanceof Error ? error.message : '创建简历诊断任务失败',
     });
   }
 });

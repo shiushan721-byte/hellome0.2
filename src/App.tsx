@@ -13,6 +13,9 @@ import AgentComingSoonPage from './pages/app/AgentComingSoonPage';
 import AgentLauncherPage from './pages/app/AgentLauncherPage';
 import UgcVideoAgentPage from './pages/app/UgcVideoAgentPage';
 import AgentChatCanvasPage from './pages/app/AgentChatCanvasPage';
+import InternshipResumeAgentPage from './pages/app/InternshipResumeAgentPage';
+import InternshipJobMatchAgentPage from './pages/app/InternshipJobMatchAgentPage';
+import ComputerSpeedAgentPage from './pages/app/ComputerSpeedAgentPage';
 import ProjectsPage from './pages/app/ProjectsPage';
 import TaskRunPage from './pages/app/TaskRunPage';
 import UsagePage from './pages/app/UsagePage';
@@ -70,6 +73,7 @@ export default function App() {
         <Route path="agents/market" element={<Navigate to="/app/agents" replace />} />
         <Route path="agents/mine" element={<Navigate to="/app/agents" replace />} />
         <Route path="agents/geo" element={<GeoAgentPage />} />
+        <Route path="agents/computer-speed" element={<ComputerSpeedAgentPage />} />
         <Route path="agents/media" element={<AgentChatCanvasPage />} />
         <Route path="agents/media-seeding" element={<AgentChatCanvasPage />} />
         <Route path="agents/media-review" element={<AgentChatCanvasPage />} />
@@ -77,6 +81,8 @@ export default function App() {
         <Route path="agents/media-showcase" element={<AgentChatCanvasPage />} />
         <Route path="agents/media-demo" element={<AgentChatCanvasPage />} />
         <Route path="agents/media-proposal" element={<AgentChatCanvasPage />} />
+        <Route path="agents/internship-resume" element={<InternshipResumeAgentPage />} />
+        <Route path="agents/internship-job-match" element={<InternshipJobMatchAgentPage />} />
         
         {/* 保留老版交互入口 */}
         <Route path="agents/media-legacy" element={<UgcVideoAgentPage />} />
