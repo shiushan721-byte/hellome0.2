@@ -1,5 +1,6 @@
 import type { Task } from '../types/workbench';
 import type { HermesDynamicSchema, UgcStructuredAnswer, UgcTaskEvent, UgcTaskInput, UgcTaskSchemaResponse } from '../types/ugc';
+import type { ResumeDiagnosisResponse, ResumeDraft } from '../types/resume';
 import { getUser } from './auth';
 
 type JsonResponse<T> = {
@@ -49,6 +50,27 @@ export async function createRemoteUgcTask(
     body: JSON.stringify({
       input,
       context,
+      user: {
+        externalId,
+        displayName: user.name,
+        email: user.email,
+        phone: user.phone,
+        workspaceName: user.workspace,
+      },
+    }),
+  });
+}
+
+export async function createRemoteResumeDiagnosisTask(input: ResumeDraft): Promise<ResumeDiagnosisResponse> {
+  const user = getUser();
+  const externalId = user.email || user.phone || 'local-user';
+  return requestJson('/api/tasks/resume/diagnosis', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      input,
       user: {
         externalId,
         displayName: user.name,
